@@ -1,26 +1,33 @@
 <script setup>
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import { useJukeboxStore } from "../stores/jukebox";
 
 const store = useJukeboxStore();
 
-const pin = ref("");
-const volume = ref(80);
+const pin = computed({
+  get: () => store.adminPin,
+  set: (value) => store.setAdminPin(value)
+});
+const volume = ref(store.player.volume || 80);
 
 function skip() {
-  store.adminAction("/api/player/skip", null, pin.value);
+  store.adminAction("/api/player/skip");
 }
 
 function pause() {
-  store.adminAction("/api/player/pause", null, pin.value);
+  store.adminAction("/api/player/pause");
 }
 
 function resume() {
-  store.adminAction("/api/player/resume", null, pin.value);
+  store.adminAction("/api/player/resume");
 }
 
 function setVolume() {
-  store.adminAction("/api/player/volume", { volume: volume.value }, pin.value);
+  store.adminAction("/api/player/volume", { volume: volume.value });
+}
+
+function clearQueue() {
+  store.clearQueue();
 }
 </script>
 
@@ -33,14 +40,17 @@ function setVolume() {
     </p>
 
     <p>
-      <button class="button" @click="skip">Skip</button>
-      <button class="button" @click="pause">Pause</button>
-      <button class="button" @click="resume">Resume</button>
+      <button class="button" @click="skip" :disabled="store.loading.admin">Skip</button>
+      <button class="button" @click="pause" :disabled="store.loading.admin">Pause</button>
+      <button class="button" @click="resume" :disabled="store.loading.admin">Resume</button>
+      <button class="button button-danger" @click="clearQueue" :disabled="store.loading.admin">Clear Queue</button>
     </p>
 
     <p>
       <input class="input" v-model.number="volume" type="number" min="0" max="100" />
-      <button class="button" @click="setVolume">Set Volume</button>
+      <button class="button" @click="setVolume" :disabled="store.loading.admin">Set Volume</button>
     </p>
+
+    <p><small>Current state: {{ store.player.state }} | Current volume: {{ store.player.volume }}</small></p>
   </section>
 </template>

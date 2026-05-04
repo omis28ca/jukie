@@ -1,0 +1,46 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+apps/web/dist/
+apps/server/dist/
+coverage/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+
+# Runtime / temp
+*.pid
+*.pid.lock
+*.seed
+*.tmp
+*.temp
+
+# Database artifacts
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# Uploaded media and generated storage
+storage/uploads/*
+!storage/uploads/.gitkeep
+
+# IDE / editor
+.idea/
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+/apps/web/package-lock.json

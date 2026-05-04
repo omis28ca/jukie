@@ -22,15 +22,26 @@ input {
 
 .header {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: 24px;
   align-items: center;
-  margin-bottom: 32px;
+  margin-bottom: 16px;
 }
 
 .header nav {
   display: flex;
   gap: 12px;
+}
+
+.header nav a {
+  text-decoration: none;
+  padding: 6px 10px;
+  border-radius: 8px;
+}
+
+.nav-active {
+  background: #232734;
 }
 
 .card {
@@ -49,6 +60,18 @@ input {
   padding: 10px 14px;
   cursor: pointer;
   font-weight: 700;
+  margin-right: 8px;
+  margin-bottom: 8px;
+}
+
+.button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.button-danger {
+  background: #ef4444;
+  color: #fff;
 }
 
 .input {
@@ -57,4 +80,37 @@ input {
   border: 1px solid #2a2d36;
   border-radius: 10px;
   padding: 10px 12px;
+  min-width: 240px;
+  max-width: 100%;
+}
+
+.connection {
+  margin: 0 0 16px;
+  font-size: 0.9rem;
+}
+
+.ok {
+  color: #6ee7b7;
+}
+
+.warn {
+  color: #f59e0b;
+}
+
+.alert {
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin: 0 0 14px;
+}
+
+.alert.error {
+  border: 1px solid #7f1d1d;
+  background: #311516;
+  color: #fecaca;
+}
+
+.alert.success {
+  border: 1px solid #14532d;
+  background: #0f2c1f;
+  color: #bbf7d0;
 }

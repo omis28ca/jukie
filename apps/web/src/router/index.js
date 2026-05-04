@@ -7,9 +7,9 @@ import AdminView from "../views/AdminView.vue";
 export default createRouter({
   history: createWebHistory(),
   routes: [
-    { path: "/", component: NowPlayingView },
-    { path: "/library", component: LibraryView },
-    { path: "/upload", component: UploadView },
-    { path: "/admin", component: AdminView }
+    { path: "/", name: "now-playing", component: NowPlayingView },
+    { path: "/library", name: "library", component: LibraryView },
+    { path: "/upload", name: "upload", component: UploadView },
+    { path: "/admin", name: "admin", component: AdminView }
   ]
 });
