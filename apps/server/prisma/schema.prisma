@@ -1,0 +1,35 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Song {
+  id         String      @id @default(uuid())
+  title      String
+  artist     String?
+  filename   String
+  path       String
+  mimeType   String?
+  duration   Int?
+  uploadedBy String?
+  createdAt  DateTime    @default(now())
+  queueItems QueueItem[]
+}
+
+model QueueItem {
+  id          String   @id @default(uuid())
+  songId      String
+  song        Song     @relation(fields: [songId], references: [id])
+  requestedBy String?
+  requesterKey String   @default("")
+  status      String   @default("queued")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@index([requesterKey, status])
+}
