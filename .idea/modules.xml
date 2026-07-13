@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/jukebox.iml" filepath="$PROJECT_DIR$/.idea/jukebox.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/vibebox.iml" filepath="$PROJECT_DIR$/.idea/vibebox.iml" />
     </modules>
   </component>
 </project>

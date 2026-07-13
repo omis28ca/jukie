@@ -12,7 +12,7 @@ onMounted(() => {
 <template>
   <main class="lcars-shell">
     <aside class="lcars-rail">
-      <div class="rail-cap">LCARS</div>
+      <div class="rail-cap">VIBEBOX</div>
       <nav class="rail-nav">
         <RouterLink to="/" active-class="nav-active">Now Playing</RouterLink>
         <RouterLink to="/library" active-class="nav-active">Library</RouterLink>
