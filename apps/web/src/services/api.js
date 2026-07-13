@@ -49,14 +49,29 @@ export const api = {
     });
   },
 
+  deleteSong(songId, pin) {
+    return request(`/api/songs/${encodeURIComponent(songId)}`, {
+      method: "DELETE",
+      headers: {
+        "x-admin-pin": pin
+      }
+    });
+  },
+
   postAdmin(path, pin, body = null) {
+    const hasJsonBody = body !== null && body !== undefined;
+    const headers = {
+      "x-admin-pin": pin
+    };
+
+    if (hasJsonBody) {
+      headers["Content-Type"] = "application/json";
+    }
+
     return request(path, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-admin-pin": pin
-      },
-      body: body ? JSON.stringify(body) : null
+      headers,
+      body: hasJsonBody ? JSON.stringify(body) : undefined
     });
   },
 

@@ -18,7 +18,9 @@ export const useJukeboxStore = defineStore("jukebox", {
     player: {
       state: "idle",
       volume: 80,
-      nowPlaying: null
+      nowPlaying: null,
+      positionSeconds: 0,
+      loopQueue: false
     },
     socket: null,
     socketConnected: false,
@@ -77,7 +79,9 @@ export const useJukeboxStore = defineStore("jukebox", {
           this.player = {
             state: player.state || "idle",
             volume: Number.isFinite(player.volume) ? player.volume : 80,
-            nowPlaying: player.nowPlaying || null
+            nowPlaying: player.nowPlaying || null,
+            positionSeconds: Number.isFinite(player.positionSeconds) ? player.positionSeconds : 0,
+            loopQueue: Boolean(player.loopQueue)
           };
         }
       });
@@ -142,7 +146,14 @@ export const useJukeboxStore = defineStore("jukebox", {
       if (!silent) this.setError("");
 
       try {
-        this.player = await api.getPlayer();
+        const player = await api.getPlayer();
+        this.player = {
+          state: player?.state || "idle",
+          volume: Number.isFinite(player?.volume) ? player.volume : 80,
+          nowPlaying: player?.nowPlaying || null,
+          positionSeconds: Number.isFinite(player?.positionSeconds) ? player.positionSeconds : 0,
+          loopQueue: Boolean(player?.loopQueue)
+        };
       } catch (error) {
         this.setError(formatError(error, "Failed to load player state"));
       } finally {
@@ -172,9 +183,10 @@ export const useJukeboxStore = defineStore("jukebox", {
       this.setStatus("");
 
       try {
-        await api.uploadSong(formData);
+        const uploadedSong = await api.uploadSong(formData);
         this.setStatus("Upload complete.");
         await this.fetchSongs({ silent: true });
+        return uploadedSong;
       } catch (error) {
         this.setError(formatError(error, "Upload failed"));
         throw error;
@@ -212,6 +224,24 @@ export const useJukeboxStore = defineStore("jukebox", {
         await this.fetchQueue({ silent: true });
       } catch (error) {
         this.setError(formatError(error, "Clear queue failed"));
+      } finally {
+        this.loading.admin = false;
+      }
+    },
+
+    async deleteSong(songId) {
+      this.loading.admin = true;
+      this.setError("");
+      this.setStatus("");
+
+      try {
+        await api.deleteSong(songId, this.adminPin);
+        this.setStatus("Song deleted.");
+        await this.fetchSongs({ silent: true });
+        await this.fetchQueue({ silent: true });
+        await this.fetchPlayer({ silent: true });
+      } catch (error) {
+        this.setError(formatError(error, "Delete song failed"));
       } finally {
         this.loading.admin = false;
       }

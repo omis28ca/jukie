@@ -1,11 +1,28 @@
 import { spawn } from "node:child_process";
 import { createConnection } from "node:net";
 import { join } from "node:path";
+import { existsSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { setTimeout as sleep } from "node:timers/promises";
 
 const IS_WIN = process.platform === "win32";
-const MPV_EXEC = process.env.PLAYER_EXEC || "mpv";
+
+function resolvePlayerExec() {
+  if (process.env.PLAYER_EXEC) {
+    return process.env.PLAYER_EXEC;
+  }
+
+  if (IS_WIN) {
+    const bundledWinMpv = join(process.cwd(), "../../mpv-x86_64-v3/mpv.exe");
+    if (existsSync(bundledWinMpv)) {
+      return bundledWinMpv;
+    }
+  }
+
+  return "mpv";
+}
+
+const MPV_EXEC = resolvePlayerExec();
 
 /**
  * Returns the IPC arg to pass to mpv and the path Node uses to connect.
@@ -23,6 +40,8 @@ function makeSocketSpec(pid, ts) {
 }
 
 export function createPlayerService({ prisma, io, emitQueueUpdated = async () => {} }) {
+  console.info(`[jukebox-player] mpv executable: ${MPV_EXEC}`);
+
   let mpvProcess = null;
   let mpvSocket = null;
   let socketSpec = null;
@@ -30,6 +49,10 @@ export function createPlayerService({ prisma, io, emitQueueUpdated = async () =>
   let state = "idle";
   let volume = 80;
   let isStopping = false;
+  let isQueueStopped = false;
+  let isLoopQueueEnabled = false;
+  let playbackStartedAtMs = null;
+  let elapsedBeforePauseSec = 0;
   let nextRequestId = 1;
   const pendingRequests = new Map();
   // Overrides the "played" status written on natural track exit
@@ -41,11 +64,37 @@ export function createPlayerService({ prisma, io, emitQueueUpdated = async () =>
     io.emit("player:state", getState());
   }
 
+  function getPositionSeconds() {
+    if (!currentQueueItem) {
+      return 0;
+    }
+
+    const duration = Number(currentQueueItem.song?.duration);
+    const hasDuration = Number.isFinite(duration) && duration > 0;
+    let position = elapsedBeforePauseSec;
+
+    if (state === "playing" && Number.isFinite(playbackStartedAtMs)) {
+      position += (Date.now() - playbackStartedAtMs) / 1000;
+    }
+
+    if (!Number.isFinite(position) || position < 0) {
+      position = 0;
+    }
+
+    if (hasDuration) {
+      position = Math.min(position, duration);
+    }
+
+    return Math.round(position * 10) / 10;
+  }
+
   function getState() {
     return {
       state,
       volume,
-      nowPlaying: currentQueueItem?.song ?? null
+      nowPlaying: currentQueueItem?.song ?? null,
+      positionSeconds: getPositionSeconds(),
+      loopQueue: isLoopQueueEnabled
     };
   }
 
@@ -125,12 +174,12 @@ export function createPlayerService({ prisma, io, emitQueueUpdated = async () =>
   // ─── Playback control ────────────────────────────────────────────
 
   async function ensurePlaying() {
-    if (isStopping || mpvProcess || state === "playing" || state === "paused") return;
+    if (isStopping || isQueueStopped || mpvProcess || state === "playing" || state === "paused") return;
     await playNext();
   }
 
   async function playNext() {
-    if (isStopping) return;
+    if (isStopping || isQueueStopped) return;
 
     const nextItem = await prisma.queueItem.findFirst({
       where: { status: "queued" },
@@ -144,6 +193,8 @@ export function createPlayerService({ prisma, io, emitQueueUpdated = async () =>
       mpvSocket = null;
       socketSpec = null;
       state = "idle";
+      playbackStartedAtMs = null;
+      elapsedBeforePauseSec = 0;
       emitState();
       io.emit("player:now-playing", null);
       return;
@@ -151,6 +202,8 @@ export function createPlayerService({ prisma, io, emitQueueUpdated = async () =>
 
     currentQueueItem = nextItem;
     exitStatusOverride = null;
+    elapsedBeforePauseSec = 0;
+    playbackStartedAtMs = Date.now();
 
     await prisma.queueItem.update({
       where: { id: nextItem.id },
@@ -200,16 +253,37 @@ export function createPlayerService({ prisma, io, emitQueueUpdated = async () =>
 
       if (currentQueueItem?.id === capturedItemId) {
         const finalStatus = exitStatusOverride || "played";
-        await prisma.queueItem.update({
-          where: { id: capturedItemId },
-          data: { status: finalStatus }
-        });
+        const shouldLoopCurrentItem = finalStatus === "played" && isLoopQueueEnabled;
+        try {
+          await prisma.queueItem.update({
+            where: { id: capturedItemId },
+            data: shouldLoopCurrentItem
+              ? {
+                  status: "queued",
+                  createdAt: new Date()
+                }
+              : { status: finalStatus }
+          });
+        } catch (error) {
+          // The queue item may already be removed (for example when deleting a song mid-playback).
+          if (error?.code !== "P2025") {
+            throw error;
+          }
+        }
         currentQueueItem = null;
       }
 
       mpvProcess = null;
+      playbackStartedAtMs = null;
+      elapsedBeforePauseSec = 0;
       await emitQueueUpdated();
       if (isStopping) return;
+      if (isQueueStopped) {
+        state = "idle";
+        emitState();
+        io.emit("player:now-playing", null);
+        return;
+      }
       await playNext();
     });
   }
@@ -247,6 +321,8 @@ export function createPlayerService({ prisma, io, emitQueueUpdated = async () =>
       return;
     }
 
+    elapsedBeforePauseSec = getPositionSeconds();
+    playbackStartedAtMs = null;
     state = "paused";
     emitState();
   }
@@ -273,6 +349,7 @@ export function createPlayerService({ prisma, io, emitQueueUpdated = async () =>
       return;
     }
 
+    playbackStartedAtMs = Date.now();
     state = "playing";
     emitState();
   }
@@ -286,8 +363,70 @@ export function createPlayerService({ prisma, io, emitQueueUpdated = async () =>
     emitState();
   }
 
+  async function seek(positionSeconds) {
+    if (!mpvProcess || !currentQueueItem) return;
+
+    const normalizedPosition = Number(positionSeconds);
+    if (!Number.isFinite(normalizedPosition)) return;
+
+    const duration = Number(currentQueueItem.song?.duration);
+    const hasDuration = Number.isFinite(duration) && duration > 0;
+    const targetPosition = hasDuration
+      ? Math.min(Math.max(0, normalizedPosition), duration)
+      : Math.max(0, normalizedPosition);
+
+    if (!mpvSocket) {
+      await waitForIpcReady(1200);
+    }
+
+    if (!mpvSocket) return;
+
+    try {
+      await sendCommand(["set_property", "time-pos", targetPosition]);
+    } catch {
+      return;
+    }
+
+    elapsedBeforePauseSec = targetPosition;
+    playbackStartedAtMs = state === "playing" ? Date.now() : null;
+    emitState();
+  }
+
   async function stop() {
+    if (isStopping) return;
+    isQueueStopped = true;
+
+    if (!mpvProcess) {
+      currentQueueItem = null;
+      state = "idle";
+      playbackStartedAtMs = null;
+      elapsedBeforePauseSec = 0;
+      emitState();
+      io.emit("player:now-playing", null);
+      return;
+    }
+
+    exitStatusOverride = "stopped";
+    if (mpvSocket) {
+      try { await sendCommand(["quit"]); return; } catch {}
+    }
+    mpvProcess.kill("SIGTERM");
+  }
+
+  async function start() {
+    if (isStopping) return;
+    isQueueStopped = false;
+    await ensurePlaying();
+  }
+
+  async function setLoopQueue(enabled) {
+    isLoopQueueEnabled = Boolean(enabled);
+    emitState();
+  }
+
+  async function shutdown() {
     isStopping = true;
+    isQueueStopped = true;
     if (!mpvProcess) return;
     exitStatusOverride = "stopped";
     if (mpvSocket) {
@@ -302,7 +441,11 @@ export function createPlayerService({ prisma, io, emitQueueUpdated = async () =>
     pause,
     resume,
     setVolume,
+    seek,
     stop,
+    start,
+    setLoopQueue,
+    shutdown,
     getState
   };
 }

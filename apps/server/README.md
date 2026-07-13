@@ -5,10 +5,11 @@ Fastify + Prisma + SQLite backend for the Office Jukebox.
 ## Features
 
 - Audio upload endpoint with file type and size guardrails
+- Embedded metadata + album artwork scanning during uploads
 - Song library and queue APIs
-- Queue fairness rule: one active queued/playing request per requester (`requestedBy` or fallback IP)
+- Queue fairness rule: up to 20 active queued/playing requests per requester (`requestedBy` or fallback IP)
 - Server-side playback orchestration with `mpv`
-- Admin PIN middleware for skip/pause/resume/volume/clear
+- Admin PIN middleware for skip/pause/resume/stop/start/seek/loop/volume/clear
 - Socket.IO events for queue/player updates
 
 ## Environment
@@ -18,9 +19,16 @@ Copy `.env.example` to `.env` and adjust values:
 - `PORT`
 - `DATABASE_URL`
 - `UPLOAD_DIR`
+- `ARTWORK_DIR`
 - `ADMIN_PIN`
-- `MAX_UPLOAD_MB`
+- `MAX_UPLOAD_MB` (default `5120`, i.e. 5 GB)
 - `ALLOWED_AUDIO_EXTENSIONS`
+- `PLAYER_EXEC` (optional; path to `mpv` binary)
+- `AUDIO_PROBE_EXEC` (optional; defaults to `ffprobe`)
+- `AUDIO_TRANSCODE_EXEC` (optional; defaults to `ffmpeg`)
+
+On Windows dev machines, if `PLAYER_EXEC` is unset, the server auto-detects `../../mpv-x86_64-v3/mpv.exe` (from `apps/server`) before falling back to `mpv` on `PATH`.
+If `AUDIO_PROBE_EXEC` is unset, the server auto-detects `../../ffmpeg-8.1.2/bin/ffprobe.exe` (from `apps/server`) before falling back to `ffprobe` on `PATH`.
 
 ## Local Setup
 

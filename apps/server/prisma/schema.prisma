@@ -11,9 +11,15 @@ model Song {
   id         String      @id @default(uuid())
   title      String
   artist     String?
+  album      String?
+  genre      String?
+  year       Int?
   filename   String
   path       String
   mimeType   String?
+  artworkFilename String?
+  artworkMimeType String?
+  artworkPath String?
   duration   Int?
   uploadedBy String?
   createdAt  DateTime    @default(now())
