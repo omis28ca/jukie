@@ -35,6 +35,11 @@ pnpm-debug.log*
 storage/uploads/*
 !storage/uploads/.gitkeep
 
+ffmpeg-8.1.2/
+mpv-x86_64-v3/
+storage/uploads/
+storage/artwork/
+
 # IDE / editor
 .idea/
 .vscode/
