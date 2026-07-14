@@ -4,11 +4,12 @@ import cors from "@fastify/cors";
 import multipart from "@fastify/multipart";
 import { Server } from "socket.io";
 import { PrismaClient } from "@prisma/client";
-import { existsSync } from "node:fs";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { existsSync, createWriteStream } from "node:fs";
+import { mkdir, readFile, rm } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { join, extname, basename, isAbsolute } from "node:path";
 import { randomUUID } from "node:crypto";
+import { pipeline } from "node:stream/promises";
 import { createPlayerService } from "./player.js";
 
 const prisma = new PrismaClient();
@@ -372,10 +373,12 @@ fastify.delete("/api/songs/:id", { preHandler: requireAdmin }, async (request, r
 fastify.post("/api/songs/upload", async (request, reply) => {
   const parts = request.parts();
 
-  let fileBuffer = null;
   let originalFilename = null;
   let mimeType = null;
   let fileCount = 0;
+  let storedFilename = null;
+  let storedPath = null;
+  let truncated = false;
   const fields = {};
 
   for await (const part of parts) {
@@ -383,27 +386,39 @@ fastify.post("/api/songs/upload", async (request, reply) => {
       fileCount += 1;
       originalFilename = part.filename;
       mimeType = part.mimetype;
-      fileBuffer = await part.toBuffer();
+
+      const extension = extname(originalFilename).toLowerCase();
+      const safeBaseName = basename(originalFilename, extension).replace(/[^a-z0-9-_]+/gi, "-").toLowerCase();
+      storedFilename = `${randomUUID()}-${safeBaseName}${extension}`;
+      storedPath = join(uploadDir, storedFilename);
+
+      await pipeline(part.file, createWriteStream(storedPath));
+      truncated = part.file.truncated;
     } else {
       fields[part.fieldname] = part.value;
     }
   }
 
-  if (fileCount !== 1 || !fileBuffer || !originalFilename) {
+  if (truncated) {
+    await rm(storedPath, { force: true });
+    return reply.code(413).send({ error: `Upload exceeds ${Math.floor(uploadMaxBytes / (1024 * 1024))}MB limit` });
+  }
+
+  if (fileCount !== 1 || !storedPath || !originalFilename) {
+    if (storedPath) {
+      await rm(storedPath, { force: true });
+    }
     return reply.code(400).send({ error: "Audio file is required" });
   }
 
   const extension = extname(originalFilename).toLowerCase();
 
   if (!allowedAudioExtensions.has(extension)) {
+    await rm(storedPath, { force: true });
     return reply.code(400).send({ error: "Unsupported audio file type" });
   }
 
   const safeBaseName = basename(originalFilename, extension).replace(/[^a-z0-9-_]+/gi, "-").toLowerCase();
-  const storedFilename = `${randomUUID()}-${safeBaseName}${extension}`;
-  const storedPath = join(uploadDir, storedFilename);
-
-  await writeFile(storedPath, fileBuffer);
   const metadata = await probeAudioMetadata(storedPath);
   const extractedArtwork = metadata.hasEmbeddedArtwork ? await extractEmbeddedArtwork(storedPath, randomUUID()) : null;
   const normalizedTitle = typeof fields.title === "string" ? fields.title.trim() : "";
