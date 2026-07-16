@@ -6,6 +6,16 @@ import { rm } from "node:fs/promises";
 import { setTimeout as sleep } from "node:timers/promises";
 
 const IS_WIN = process.platform === "win32";
+const DEFAULT_AUDIO_OUTPUT_DEVICE_ID = "auto";
+
+function normalizeAudioOutputDeviceId(value) {
+  if (typeof value !== "string") {
+    return DEFAULT_AUDIO_OUTPUT_DEVICE_ID;
+  }
+
+  const normalized = value.trim();
+  return normalized || DEFAULT_AUDIO_OUTPUT_DEVICE_ID;
+}
 
 function resolvePlayerExec() {
   if (process.env.PLAYER_EXEC) {
@@ -55,6 +65,12 @@ export function createPlayerService({ prisma, io, emitQueueUpdated = async () =>
   let elapsedBeforePauseSec = 0;
   let nextRequestId = 1;
   const pendingRequests = new Map();
+  let preferredAudioOutputDeviceId = DEFAULT_AUDIO_OUTPUT_DEVICE_ID;
+  let audioOutputApplyStatus = {
+    applied: null,
+    message: "Using system default output device.",
+    lastAttemptAt: null
+  };
   // Overrides the "played" status written on natural track exit
   let exitStatusOverride = null;
 
@@ -94,7 +110,13 @@ export function createPlayerService({ prisma, io, emitQueueUpdated = async () =>
       volume,
       nowPlaying: currentQueueItem?.song ?? null,
       positionSeconds: getPositionSeconds(),
-      loopQueue: isLoopQueueEnabled
+      loopQueue: isLoopQueueEnabled,
+      audioOutput: {
+        deviceId: preferredAudioOutputDeviceId,
+        applied: audioOutputApplyStatus.applied,
+        message: audioOutputApplyStatus.message,
+        lastAttemptAt: audioOutputApplyStatus.lastAttemptAt
+      }
     };
   }
 
@@ -171,6 +193,61 @@ export function createPlayerService({ prisma, io, emitQueueUpdated = async () =>
     return Boolean(mpvSocket);
   }
 
+  async function setPreferredAudioOutputDevice(deviceId) {
+    preferredAudioOutputDeviceId = normalizeAudioOutputDeviceId(deviceId);
+
+    if (!mpvProcess) {
+      audioOutputApplyStatus = {
+        applied: null,
+        message: "Saved. Will apply on next playback start.",
+        lastAttemptAt: new Date().toISOString()
+      };
+      emitState();
+      return { ...audioOutputApplyStatus, deviceId: preferredAudioOutputDeviceId };
+    }
+
+    if (!mpvSocket) {
+      await waitForIpcReady(1200);
+    }
+
+    if (!mpvSocket) {
+      audioOutputApplyStatus = {
+        applied: false,
+        message: "Saved, but could not apply immediately. If audio output does not change, set your OS default output device.",
+        lastAttemptAt: new Date().toISOString()
+      };
+      emitState();
+      return { ...audioOutputApplyStatus, deviceId: preferredAudioOutputDeviceId };
+    }
+
+    try {
+      await sendCommand(["set_property", "audio-device", preferredAudioOutputDeviceId]);
+      audioOutputApplyStatus = {
+        applied: true,
+        message: "Saved and applied to active playback.",
+        lastAttemptAt: new Date().toISOString()
+      };
+    } catch {
+      audioOutputApplyStatus = {
+        applied: false,
+        message: "Saved, but runtime apply is not supported in this environment. Set your OS default output device.",
+        lastAttemptAt: new Date().toISOString()
+      };
+    }
+
+    emitState();
+    return { ...audioOutputApplyStatus, deviceId: preferredAudioOutputDeviceId };
+  }
+
+  function getAudioOutputPreference() {
+    return {
+      deviceId: preferredAudioOutputDeviceId,
+      applied: audioOutputApplyStatus.applied,
+      message: audioOutputApplyStatus.message,
+      lastAttemptAt: audioOutputApplyStatus.lastAttemptAt
+    };
+  }
+
   // ─── Playback control ────────────────────────────────────────────
 
   async function ensurePlaying() {
@@ -226,6 +303,7 @@ export function createPlayerService({ prisma, io, emitQueueUpdated = async () =>
       "--no-video",
       "--really-quiet",
       `--volume=${volume}`,
+      `--audio-device=${preferredAudioOutputDeviceId}`,
       `--input-ipc-server=${socketSpec.ipcArg}`,
       nextItem.song.path
     ]);
@@ -241,6 +319,8 @@ export function createPlayerService({ prisma, io, emitQueueUpdated = async () =>
       mpvSocket = sock;
       // Sync volume if it changed while IPC was still connecting
       sendCommand(["set_property", "volume", volume]).catch(() => {});
+      // Best effort re-assertion in case runtime audio-device switching is supported.
+      sendCommand(["set_property", "audio-device", preferredAudioOutputDeviceId]).catch(() => {});
     });
 
     const capturedItemId = nextItem.id;
@@ -445,7 +525,9 @@ export function createPlayerService({ prisma, io, emitQueueUpdated = async () =>
     stop,
     start,
     setLoopQueue,
+    setPreferredAudioOutputDevice,
     shutdown,
-    getState
+    getState,
+    getAudioOutputPreference
   };
 }

@@ -15,6 +15,8 @@ import { createPlayerService } from "./player.js";
 const prisma = new PrismaClient();
 const ACTIVE_QUEUE_STATUSES = ["queued", "playing"];
 const MAX_ACTIVE_QUEUE_ITEMS_PER_REQUESTER = 20;
+const AUDIO_OUTPUT_SETTING_KEY = "player.audioOutputDeviceId";
+const DEFAULT_AUDIO_OUTPUT_DEVICE_ID = "auto";
 const defaultMaxUploadMb = 5 * 1024;
 const configuredMaxUploadMb = Number(process.env.MAX_UPLOAD_MB || defaultMaxUploadMb);
 const maxUploadMb = Number.isFinite(configuredMaxUploadMb) && configuredMaxUploadMb > 0 ? configuredMaxUploadMb : defaultMaxUploadMb;
@@ -27,6 +29,30 @@ const allowedAudioExtensions = new Set(
     .filter(Boolean)
     .map((entry) => (entry.startsWith(".") ? entry : `.${entry}`))
 );
+
+function normalizeAudioOutputDeviceId(value) {
+  if (typeof value !== "string") {
+    return DEFAULT_AUDIO_OUTPUT_DEVICE_ID;
+  }
+
+  const normalized = value.trim();
+  return normalized || DEFAULT_AUDIO_OUTPUT_DEVICE_ID;
+}
+
+async function getAudioOutputSetting() {
+  const setting = await prisma.appSetting.findUnique({ where: { key: AUDIO_OUTPUT_SETTING_KEY } });
+  return normalizeAudioOutputDeviceId(setting?.value);
+}
+
+async function setAudioOutputSetting(deviceId) {
+  const normalized = normalizeAudioOutputDeviceId(deviceId);
+  await prisma.appSetting.upsert({
+    where: { key: AUDIO_OUTPUT_SETTING_KEY },
+    update: { value: normalized },
+    create: { key: AUDIO_OUTPUT_SETTING_KEY, value: normalized }
+  });
+  return normalized;
+}
 
 function resolveAudioProbeExec() {
   if (process.env.AUDIO_PROBE_EXEC) {
@@ -573,6 +599,35 @@ fastify.post("/api/player/volume", { preHandler: requireAdmin }, async (request,
   return { ok: true };
 });
 
+fastify.get("/api/admin/settings/audio-output", { preHandler: requireAdmin }, async () => {
+  const deviceId = await getAudioOutputSetting();
+  const playerPreference = player.getAudioOutputPreference();
+  return {
+    deviceId,
+    applied: playerPreference.applied,
+    message: playerPreference.message,
+    lastAttemptAt: playerPreference.lastAttemptAt
+  };
+});
+
+fastify.post("/api/admin/settings/audio-output", { preHandler: requireAdmin }, async (request, reply) => {
+  const { deviceId } = request.body || {};
+  if (deviceId !== undefined && typeof deviceId !== "string") {
+    return reply.code(400).send({ error: "deviceId must be a string when provided" });
+  }
+
+  const normalizedDeviceId = await setAudioOutputSetting(deviceId);
+  const applyResult = await player.setPreferredAudioOutputDevice(normalizedDeviceId);
+
+  return {
+    ok: true,
+    deviceId: normalizedDeviceId,
+    applied: applyResult.applied,
+    message: applyResult.message,
+    lastAttemptAt: applyResult.lastAttemptAt
+  };
+});
+
 io.on("connection", async (socket) => {
   socket.emit("player:state", player.getState());
   socket.emit("queue:updated", await getActiveQueue());
@@ -589,6 +644,8 @@ io.on("connection", async (socket) => {
 const port = Number(process.env.PORT || 3000);
 fastify.log.info({ audioProbeExec }, "Audio probe executable resolved");
 fastify.log.info({ audioTranscodeExec }, "Audio transcode executable resolved");
+const persistedAudioOutputDeviceId = await getAudioOutputSetting();
+await player.setPreferredAudioOutputDevice(persistedAudioOutputDeviceId);
 await player.ensurePlaying();
 
 await fastify.listen({ port, host: "0.0.0.0" });

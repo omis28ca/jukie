@@ -39,3 +39,10 @@ model QueueItem {
   @@index([status, createdAt])
   @@index([requesterKey, status])
 }
+
+model AppSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+

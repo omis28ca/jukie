@@ -20,7 +20,13 @@ export const useJukeboxStore = defineStore("jukebox", {
       volume: 80,
       nowPlaying: null,
       positionSeconds: 0,
-      loopQueue: false
+      loopQueue: false,
+      audioOutput: {
+        deviceId: "auto",
+        applied: null,
+        message: "",
+        lastAttemptAt: null
+      }
     },
     socket: null,
     socketConnected: false,
@@ -81,7 +87,13 @@ export const useJukeboxStore = defineStore("jukebox", {
             volume: Number.isFinite(player.volume) ? player.volume : 80,
             nowPlaying: player.nowPlaying || null,
             positionSeconds: Number.isFinite(player.positionSeconds) ? player.positionSeconds : 0,
-            loopQueue: Boolean(player.loopQueue)
+            loopQueue: Boolean(player.loopQueue),
+            audioOutput: {
+              deviceId: typeof player.audioOutput?.deviceId === "string" ? player.audioOutput.deviceId : "auto",
+              applied: typeof player.audioOutput?.applied === "boolean" ? player.audioOutput.applied : null,
+              message: typeof player.audioOutput?.message === "string" ? player.audioOutput.message : "",
+              lastAttemptAt: typeof player.audioOutput?.lastAttemptAt === "string" ? player.audioOutput.lastAttemptAt : null
+            }
           };
         }
       });
@@ -152,12 +164,59 @@ export const useJukeboxStore = defineStore("jukebox", {
           volume: Number.isFinite(player?.volume) ? player.volume : 80,
           nowPlaying: player?.nowPlaying || null,
           positionSeconds: Number.isFinite(player?.positionSeconds) ? player.positionSeconds : 0,
-          loopQueue: Boolean(player?.loopQueue)
+          loopQueue: Boolean(player?.loopQueue),
+          audioOutput: {
+            deviceId: typeof player?.audioOutput?.deviceId === "string" ? player.audioOutput.deviceId : "auto",
+            applied: typeof player?.audioOutput?.applied === "boolean" ? player.audioOutput.applied : null,
+            message: typeof player?.audioOutput?.message === "string" ? player.audioOutput.message : "",
+            lastAttemptAt: typeof player?.audioOutput?.lastAttemptAt === "string" ? player.audioOutput.lastAttemptAt : null
+          }
         };
       } catch (error) {
         this.setError(formatError(error, "Failed to load player state"));
       } finally {
         this.loading.player = false;
+      }
+    },
+
+    async fetchAudioOutputPreference() {
+      this.loading.admin = true;
+      this.setError("");
+
+      try {
+        const preference = await api.getAdminAudioOutputPreference(this.adminPin);
+        this.player.audioOutput = {
+          deviceId: typeof preference?.deviceId === "string" ? preference.deviceId : "auto",
+          applied: typeof preference?.applied === "boolean" ? preference.applied : null,
+          message: typeof preference?.message === "string" ? preference.message : "",
+          lastAttemptAt: typeof preference?.lastAttemptAt === "string" ? preference.lastAttemptAt : null
+        };
+      } catch (error) {
+        this.setError(formatError(error, "Failed to load audio output preference"));
+      } finally {
+        this.loading.admin = false;
+      }
+    },
+
+    async saveAudioOutputPreference(deviceId) {
+      this.loading.admin = true;
+      this.setError("");
+      this.setStatus("");
+
+      try {
+        const result = await api.setAdminAudioOutputPreference(this.adminPin, deviceId);
+        this.player.audioOutput = {
+          deviceId: typeof result?.deviceId === "string" ? result.deviceId : "auto",
+          applied: typeof result?.applied === "boolean" ? result.applied : null,
+          message: typeof result?.message === "string" ? result.message : "",
+          lastAttemptAt: typeof result?.lastAttemptAt === "string" ? result.lastAttemptAt : null
+        };
+        this.setStatus(result?.message || "Audio output preference saved.");
+        await this.fetchPlayer({ silent: true });
+      } catch (error) {
+        this.setError(formatError(error, "Saving audio output preference failed"));
+      } finally {
+        this.loading.admin = false;
       }
     },
 

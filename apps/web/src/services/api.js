@@ -34,6 +34,15 @@ export const api = {
     return request("/api/player");
   },
 
+  getAdminAudioOutputPreference(pin) {
+    return request("/api/admin/settings/audio-output", {
+      method: "GET",
+      headers: {
+        "x-admin-pin": pin
+      }
+    });
+  },
+
   addToQueue(songId, requestedBy) {
     return request("/api/queue", {
       method: "POST",
@@ -81,6 +90,17 @@ export const api = {
       headers: {
         "x-admin-pin": pin
       }
+    });
+  },
+
+  setAdminAudioOutputPreference(pin, deviceId) {
+    return request("/api/admin/settings/audio-output", {
+      method: "POST",
+      headers: {
+        "x-admin-pin": pin,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ deviceId })
     });
   }
 };
