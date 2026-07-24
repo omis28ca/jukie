@@ -4,11 +4,21 @@ Vue 3 + Vite + Pinia frontend for the Office Jukebox.
 
 ## Features
 
-- Live `Now Playing` and queue updates via Socket.IO
-- Library browsing with search and add-to-queue
-- Song upload form with status feedback
-- Admin controls (PIN): skip, pause, resume, volume, clear queue
-- Connection status and global error/success messaging
+- Unified catalog-first workspace with a responsive sidebar and persistent player
+- Featured releases plus search, genre/artwork filters, sorting, and requester names
+- Live now-playing state and shared queue updates via Socket.IO
+- Drag-and-drop upload panel with extracted metadata and artwork preview
+- Queue drawer with requester details, looping, refresh, and clear-upcoming controls
+- PIN-protected pause, resume, start, stop, skip, seek, volume, delete, and output-device controls
+- Responsive desktop, tablet, and mobile layouts with keyboard-accessible controls
+
+The required URLs remain available as entry points into the same workspace:
+
+- `/` and `/library` open the catalog
+- `/upload` opens the upload panel over the catalog
+- `/admin` opens Studio Controls over the catalog
+
+Press `Ctrl+K` (or `Cmd+K`) to focus library search from anywhere in the workspace.
 
 ## Environment
 

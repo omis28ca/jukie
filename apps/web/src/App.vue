@@ -10,36 +10,20 @@ onMounted(() => {
 </script>
 
 <template>
-  <main class="lcars-shell">
-    <aside class="lcars-rail">
-      <div class="rail-cap">VIBEBOX</div>
-      <nav class="rail-nav">
-        <RouterLink to="/" active-class="nav-active">Now Playing</RouterLink>
-        <RouterLink to="/library" active-class="nav-active">Library</RouterLink>
-        <RouterLink to="/upload" active-class="nav-active">Upload</RouterLink>
-        <RouterLink to="/admin" active-class="nav-active">Admin</RouterLink>
-      </nav>
-      <div class="rail-foot">Stardate 2026.194</div>
-    </aside>
+  <div class="app-root">
+    <RouterView />
 
-    <section class="lcars-content">
-      <header class="header">
-        <h1>Audio Access Terminal</h1>
-        <div class="header-pills">
-          <span>01</span>
-          <span>02</span>
-          <span>03</span>
-        </div>
-      </header>
-
-      <p class="connection" :class="store.socketConnected ? 'ok' : 'warn'">
-        {{ store.socketConnected ? "Live updates connected" : "Reconnecting live updates..." }}
-      </p>
-
-      <p v-if="store.errorMessage" class="alert error">{{ store.errorMessage }}</p>
-      <p v-if="store.statusMessage" class="alert success">{{ store.statusMessage }}</p>
-
-      <RouterView />
-    </section>
-  </main>
+    <div class="toast-stack" aria-live="polite" aria-atomic="true">
+      <div v-if="store.errorMessage" class="toast toast-error" role="alert">
+        <span class="toast-icon" aria-hidden="true">!</span>
+        <span>{{ store.errorMessage }}</span>
+        <button type="button" aria-label="Dismiss error" @click="store.setError('')">×</button>
+      </div>
+      <div v-if="store.statusMessage" class="toast toast-success" role="status">
+        <span class="toast-icon" aria-hidden="true">✓</span>
+        <span>{{ store.statusMessage }}</span>
+        <button type="button" aria-label="Dismiss message" @click="store.setStatus('')">×</button>
+      </div>
+    </div>
+  </div>
 </template>

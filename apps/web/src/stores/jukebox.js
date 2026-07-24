@@ -30,6 +30,7 @@ export const useJukeboxStore = defineStore("jukebox", {
     },
     socket: null,
     socketConnected: false,
+    initializing: false,
     initialized: false,
     loading: {
       songs: false,
@@ -70,6 +71,7 @@ export const useJukeboxStore = defineStore("jukebox", {
 
       this.socket.on("connect", () => {
         this.socketConnected = true;
+        this.refreshRealtime();
       });
 
       this.socket.on("disconnect", () => {
@@ -105,20 +107,30 @@ export const useJukeboxStore = defineStore("jukebox", {
       this.socket.on("song:uploaded", () => {
         this.fetchSongs({ silent: true });
       });
+
+      this.socket.on("player:error", (error) => {
+        const message = typeof error === "string" ? error : error?.message;
+        this.setError(message || "The audio player reported an error.");
+      });
     },
 
     async init() {
-      if (this.initialized) return;
+      if (this.initialized || this.initializing) return;
+      this.initializing = true;
       this.connectSocket();
 
-      await Promise.all([
-        this.fetchSongs({ silent: true }),
-        this.fetchQueue({ silent: true }),
-        this.fetchPlayer({ silent: true })
-      ]);
+      try {
+        await Promise.all([
+          this.fetchSongs({ silent: true }),
+          this.fetchQueue({ silent: true }),
+          this.fetchPlayer({ silent: true })
+        ]);
 
-      this.refreshRealtime();
-      this.initialized = true;
+        this.refreshRealtime();
+        this.initialized = true;
+      } finally {
+        this.initializing = false;
+      }
     },
 
     refreshRealtime() {

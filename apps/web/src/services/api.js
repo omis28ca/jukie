@@ -1,5 +1,12 @@
 const API_BASE = (import.meta.env.VITE_API_BASE || "").replace(/\/$/, "");
 
+export function resolveApiUrl(path) {
+  if (!path || typeof path !== "string") return "";
+  if (/^(?:https?:|data:|blob:)/i.test(path)) return path;
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  return `${API_BASE}${normalizedPath}`;
+}
+
 async function parseResponse(response) {
   const contentType = response.headers.get("content-type") || "";
   const isJson = contentType.includes("application/json");
