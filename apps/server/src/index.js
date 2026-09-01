@@ -11,7 +11,7 @@ import { join, extname, basename, isAbsolute } from "node:path";
 import { randomUUID } from "node:crypto";
 import { pipeline } from "node:stream/promises";
 import { createPlayerService } from "./player.js";
-import { createFolderImporter, findImportableFiles } from "./folder-importer.js";
+import { createFolderImporter, findImportableFiles, decodeFilenameForDisplay } from "./folder-importer.js";
 import { createExternalMusicService } from "./external-music.js";
 
 const prisma = new PrismaClient();
@@ -445,8 +445,11 @@ function getImportedMimeType(extension) {
 }
 
 async function stageImportedSong(sourcePath, importId) {
+  // sourcePath is a byte-preserving (latin1) string from findImportableFiles, not necessarily
+  // valid UTF-8 text — see the comment on toRawPath() in folder-importer.js. Convert it back to
+  // raw bytes for the actual filesystem call, and decode a display-safe copy for the title fallback.
   const extension = extname(sourcePath).toLowerCase();
-  const sourceBaseName = basename(sourcePath, extension);
+  const sourceBaseName = decodeFilenameForDisplay(basename(sourcePath, extension));
   const safeBaseName = sourceBaseName.replace(/[^a-z0-9-_]+/gi, "-").toLowerCase() || "media";
   const songId = randomUUID();
   const storedFilename = `${importId}-${songId}-${safeBaseName}${extension}`;
@@ -454,7 +457,7 @@ async function stageImportedSong(sourcePath, importId) {
   let extractedArtwork = null;
 
   try {
-    await copyFile(sourcePath, storedPath);
+    await copyFile(Buffer.from(sourcePath, "latin1"), storedPath);
     const metadata = (await probeAudioMetadata(storedPath)) || EMPTY_METADATA;
     extractedArtwork = metadata.hasEmbeddedArtwork
       ? await extractEmbeddedArtwork(storedPath, `${importId}-${randomUUID()}`)
