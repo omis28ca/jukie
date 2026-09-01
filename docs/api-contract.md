@@ -1,251 +1,46 @@
 # API Contract
 
-Base path: `/api`
+Base URL: `/api`. JSON errors use `{ "error": "message" }`. Admin routes require `x-admin-pin` matching the configured four-digit `ADMIN_PIN`.
 
 ## Songs
 
-### Upload Song
+- `GET /songs` returns newest-first song objects. Each includes metadata plus `artworkUrl`, `mediaUrl`, `mimeType`, and `duration`.
+- `POST /songs/upload` accepts multipart fields `file` (exactly one), optional `title`, `artist`, and `uploadedBy`; returns the created song with status 201. Allowed extensions and maximum size are configured by the server.
+- `GET /songs/:id/artwork` returns extracted embedded artwork or 404.
+- `GET /songs/:id/media` streams uploaded media and supports a single HTTP byte range (`206`, `Content-Range`) for browser seeking.
+- `DELETE /songs/:id` is admin-only and deletes the song, every queue history row, media, and artwork. Deleting the active song safely advances playback.
 
-`POST /api/songs/upload`
+## External music
 
-Multipart form fields:
-- `file`: audio file
-- `title`: optional
-- `artist`: optional
-- `uploadedBy`: optional
+- `GET /external/search?provider=archive&q=...` returns Internet Archive audio tagged CC0 or Public Domain. Results include source/license attribution and whether the item is already imported.
+- `GET /external/search?provider=youtube&q=...` uses the configured official YouTube Data API and returns link-only results. YouTube media is not importable.
+- `POST /external/import` accepts `{ "provider": "archive", "sourceId": "identifier", "sourceFile": "track.mp3" }`. The server revalidates the exact file and public-domain metadata, downloads a quota-limited MP3 into managed storage, and returns `{ song, alreadyImported }`. Searches and imports are rate-limited.
 
-Response:
+## Moods
 
-```json
-{
-  "id": "song_uuid",
-  "title": "Song Title",
-  "artist": "Artist",
-  "album": "Album Name",
-  "genre": "Rock",
-  "year": 2021,
-  "artworkUrl": "/api/songs/song_uuid/artwork",
-  "filename": "stored-file-name.mp3"
-}
-```
-
-If embedded tags/artwork exist in the uploaded file, the server scans and returns them.
-
-### List Songs
-
-`GET /api/songs`
-
-Response:
-
-```json
-[
-  {
-    "id": "song_uuid",
-    "title": "Song Title",
-    "artist": "Artist",
-    "album": "Album Name",
-    "genre": "Rock",
-    "year": 2021,
-    "artworkUrl": "/api/songs/song_uuid/artwork",
-    "duration": 210,
-    "createdAt": "2026-05-02T00:00:00.000Z"
-  }
-]
-```
-
-`duration` is in seconds and may be `null` when probing metadata is unavailable.
-
-### Delete Song (Admin)
-
-`DELETE /api/songs/:id`
-
-Headers:
-- `x-admin-pin`: required when `ADMIN_PIN` is configured
-
-Responses:
-
-```json
-{
-  "ok": true
-}
-```
-
-Possible errors:
-- `401` Unauthorized
-- `404` Song not found
-
-Notes:
-- Deleting a song removes its queue entries (`queued`, `playing`, and history statuses).
-- If the song is currently playing, playback is skipped and the queue advances automatically.
-
-### Get Song Artwork
-
-`GET /api/songs/:id/artwork`
-
-Returns embedded/extracted album artwork for the song when available.
+- `GET /moods` returns name-sorted moods with their songs in playlist order.
+- Admin-only `POST /moods` creates a mood from `{ "name": "Friday energy", "songIds": ["uuid"] }`.
+- Admin-only `PUT /moods/:id` replaces a mood's name and ordered songs using the same body.
+- Admin-only `DELETE /moods/:id` deletes a mood without deleting its songs.
+- `POST /moods/:id/select` accepts `{ "requestedBy": "optional" }`. Anyone may select a mood; selection atomically replaces all upcoming queue items without interrupting the currently playing song.
 
 ## Queue
 
-### Get Queue
-
-`GET /api/queue`
-
-Response:
-
-```json
-[
-  {
-    "id": "queue_item_uuid",
-    "status": "queued",
-    "requestedBy": "Robert",
-    "song": {
-      "id": "song_uuid",
-      "title": "Song Title",
-      "artist": "Artist"
-    }
-  }
-]
-```
-
-### Add Song to Queue
-
-`POST /api/queue`
-
-Body:
-
-```json
-{
-  "songId": "song_uuid",
-  "requestedBy": "Robert"
-}
-```
-
-Response:
-
-```json
-{
-  "id": "queue_item_uuid",
-  "status": "queued"
-}
-```
-
-Notes:
-
-- A requester can have up to 20 active songs in the queue (`status: "queued"` or `"playing"`).
-- If this limit is exceeded, the API returns `409 Conflict`:
-
-```json
-{
-  "error": "You can only have up to 20 active songs in the queue"
-}
-```
-
-### Clear Queue
-
-`DELETE /api/queue`
-
-Admin-only in production.
-
-Clears upcoming queued entries (`status: "queued"`) and does not stop the currently playing track.
+- `GET /queue` returns active `playing` and `queued` items in playback order.
+- `POST /queue` accepts `{ "songId": "uuid", "requestedBy": "optional", "playNext": false }`. `playNext: true` inserts before existing queued items. Requesters may have at most 20 active items.
+- `DELETE /queue/:id` removes one item only while it is `queued`.
+- `DELETE /queue` is admin-only and marks all `queued` items cleared without interrupting the playing item.
 
 ## Player
 
-### Get Player State
+- `GET /player` returns `{ state, volume, nowPlaying, positionSeconds, loopQueue, audioOutput }`.
+- `POST /player/skip`, `/pause`, and `/resume` are listener controls with no body.
+- Admin-only `POST /player/stop` and `/start` have no body.
+- `POST /player/seek` accepts `{ "positionSeconds": 0 }`.
+- Admin-only `POST /player/volume` accepts `{ "volume": 0..100 }`.
+- `POST /player/loop` accepts `{ "enabled": true }`.
+- Admin-only `GET|POST /admin/settings/audio-output` reads or writes `{ "deviceId": "auto" }`.
 
-`GET /api/player`
+## Socket.IO
 
-Response:
-
-```json
-{
-  "state": "playing",
-  "nowPlaying": {
-    "id": "song_uuid",
-    "title": "Song Title",
-    "artist": "Artist"
-  },
-  "volume": 80,
-  "positionSeconds": 42.3,
-  "loopQueue": true
-}
-```
-
-`positionSeconds` is the current playback position in seconds.
-
-### Skip
-
-`POST /api/player/skip`
-
-### Pause
-
-`POST /api/player/pause`
-
-### Resume
-
-`POST /api/player/resume`
-
-### Stop
-
-`POST /api/player/stop`
-
-Stops current playback and leaves the queue paused until started again.
-
-### Start
-
-`POST /api/player/start`
-
-### Loop Queue
-
-`POST /api/player/loop`
-
-Body:
-
-```json
-{
-  "enabled": true
-}
-```
-
-When enabled, tracks that finish naturally are recycled back into the queue instead of being marked as `played`.
-
-### Seek
-
-`POST /api/player/seek`
-
-Body:
-
-```json
-{
-  "positionSeconds": 95.5
-}
-```
-
-### Set Volume
-
-`POST /api/player/volume`
-
-Body:
-
-```json
-{
-  "volume": 75
-}
-```
-
-## WebSocket Events
-
-Server emits:
-
-```txt
-queue:updated
-player:now-playing
-player:state
-song:uploaded
-```
-
-Client emits:
-
-```txt
-queue:refresh
-player:refresh
-```
+The server emits `queue:updated`, `moods:updated`, `player:state`, `player:now-playing`, `song:uploaded`, `songs:updated`, and `player:error`. Clients may emit `queue:refresh`, `moods:refresh`, and `player:refresh` to request current snapshots.

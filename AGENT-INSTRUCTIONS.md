@@ -5,9 +5,9 @@ Use this file as the implementation contract when rebuilding the entire app from
 ## Non-Negotiable Constraints
 
 1. Frontend must be **Vue 3** (no React migration).
-2. Keep playback logic server-side; browser must not stream and mix tracks itself.
+2. Keep playback logic server-side; browser can stream tracks to a users device for song or video previews.
 3. Use local filesystem uploads for MVP.
-4. Use admin PIN middleware instead of full auth for MVP.
+4. Use PIN for auth for MVP.
 5. Target local Ubuntu-hosted playback via `mpv`.
 
 ## Required Stack
@@ -37,7 +37,6 @@ Use this file as the implementation contract when rebuilding the entire app from
 - Clear queue clears only `queued` items
 
 ### Fairness and Safety
-- Per requester max 20 active items (`queued` + `playing`)
 - Requester key from `requestedBy` else fallback `ip:<request.ip>`
 - Song deletion must work even if song is queued/playing
 - Deletion must remove dependent queue rows and uploaded files/artwork files
@@ -91,12 +90,7 @@ Client emits:
 - `queue:refresh`
 - `player:refresh`
 
-## UI Route Requirements
 
-- `/` Now Playing: artwork, progress, queue list, admin transport controls
-- `/library` Library: search, add-to-queue, delete (admin)
-- `/upload` Upload: drag/drop uploader + metadata preview
-- `/admin` Admin: PIN and volume control
 
 ## Environment Requirements
 

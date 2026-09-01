@@ -1,5 +1,6 @@
 <script setup>
 import { onMounted } from "vue";
+import AdminPinKeypad from "./components/AdminPinKeypad.vue";
 import { useJukeboxStore } from "./stores/jukebox";
 
 const store = useJukeboxStore();
@@ -12,6 +13,7 @@ onMounted(() => {
 <template>
   <div class="app-root">
     <RouterView />
+    <AdminPinKeypad />
 
     <div class="toast-stack" aria-live="polite" aria-atomic="true">
       <div v-if="store.errorMessage" class="toast toast-error" role="alert">

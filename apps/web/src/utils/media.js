@@ -21,6 +21,12 @@ export function getSongArtworkUrl(song) {
   return "";
 }
 
+export function getSongMediaUrl(song) {
+  if (!song) return "";
+  if (song.mediaUrl) return resolveApiUrl(song.mediaUrl);
+  return song.id ? resolveApiUrl(`/api/songs/${encodeURIComponent(song.id)}/media`) : "";
+}
+
 export function getSongInitials(song) {
   const title = String(song?.title || "").trim();
   const artist = String(song?.artist || "").trim();

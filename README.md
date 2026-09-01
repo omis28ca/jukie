@@ -1,12 +1,12 @@
-# Office Jukebox
+# jukie
 
-This repository is a complete local-network jukebox for an office:
-- users upload audio files,
+This repository is a complete local-network jukebox for a home automation system:
+- users can upload audio or video files,
 - users queue tracks from a shared library,
 - an Ubuntu host plays audio through `mpv`,
 - everyone sees live queue/player state in real time.
 
-The project is intentionally optimized for **simple local deployment**, not internet-scale auth or cloud complexity.
+The project is intentionally optimized for **simple local deployment**, with basic four-digit PIN authorization for administrative actions.
 
 ## Tech Stack
 
@@ -19,26 +19,29 @@ The project is intentionally optimized for **simple local deployment**, not inte
 ## Core Product Behavior
 
 ### User capabilities
-- Upload audio (`.mp3`, `.wav`, `.m4a`, `.flac`; configurable)
+- Upload audio or video (`.mp3`, `.mp4`)
 - Drag/drop upload UI with post-upload metadata preview
 - Browse/search library (title/artist/album/genre)
 - Add songs to queue
 - Watch now playing + queue updates live
-
-### Admin capabilities (PIN-gated)
-- Start/stop queue playback
 - Skip track
 - Pause/resume
 - Seek position
-- Set volume
 - Toggle loop queue on/off
-- Clear queued entries
+- Clear queued entry
+- add song or video to play next in queue
+- remove song or video from play next in queue
+- preview audio or video in the browser without affecting room playback
+
+### Admin capabilities (PIN-gated)
 - Delete songs (including while playing)
+- Set volume
+- Clear all queued entry
+- Start/stop queue playback
 
 ### Queue rules
 - Active statuses: `queued`, `playing`
-- Per-requester active cap: **20 songs**
-- Requester identity: provided name or fallback `ip:<request.ip>`
+- Requester identity: provided name or alias with fallback `ip:<request.ip>`
 - Loop mode: naturally finished tracks return to queue tail instead of falling off
 
 ## High-Level Architecture
@@ -73,11 +76,13 @@ Base path: `/api`
 - `GET /api/songs`
 - `POST /api/songs/upload` (multipart: `file`, optional `title`, `artist`, `uploadedBy`)
 - `GET /api/songs/:id/artwork`
+- `GET /api/songs/:id/media` (byte-range streaming for browser previews)
 - `DELETE /api/songs/:id` (admin)
 
 ### Queue
 - `GET /api/queue`
 - `POST /api/queue`
+- `DELETE /api/queue/:id` (remove one upcoming item)
 - `DELETE /api/queue` (admin clear queued items)
 
 ### Player
@@ -124,8 +129,9 @@ Client emits:
 
 ### Backend
 ```powershell
-Set-Location "C:\Users\omar\src\pm-jukebox\apps\server"
-npm install
+Set-Location "C:\Users\omis\src\jukie\apps\server"
+Copy-Item .env.example .env -ErrorAction SilentlyContinue
+npm ci
 npm run prisma:generate
 npm run prisma:push
 npm run dev
@@ -133,16 +139,14 @@ npm run dev
 
 ### Frontend
 ```powershell
-Set-Location "C:\Users\omar\src\pm-jukebox\apps\web"
-npm install
+Set-Location "C:\Users\omis\src\jukie\apps\web"
+Copy-Item .env.example .env -ErrorAction SilentlyContinue
+npm ci
 npm run dev
 ```
 
-## Rebuild This App From Scratch
+Ubuntu deployment, reverse-proxy notes, migrations, and systemd guidance are in [`docs/deployment.md`](docs/deployment.md).
 
-If another agent must rebuild everything from one prompt, use:
-- `AGENT-INSTRUCTIONS.md` for exact constraints and delivery requirements
-- `REBUILD-PROMPT.md` for a copy/paste, single-shot implementation prompt
 
 ## Acceptance Criteria
 
@@ -152,6 +156,5 @@ A rebuild is considered complete when:
 - queue/player state syncs in real time via sockets,
 - playback controls work against server-side `mpv`,
 - loop mode recycles naturally completed tracks,
-- per-requester queue cap enforcement works,
 - deleting currently playing tracks is handled safely,
 - frontend build and backend startup succeed locally.

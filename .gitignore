@@ -37,7 +37,13 @@ storage/uploads/*
 
 
 
-storage/artwork/
+storage/artwork/*
+!storage/artwork/.gitkeep
+
+storage/imports/*
+!storage/imports/.gitkeep
+storage/player-state.json
+storage/player-state.json.*.tmp
 
 # IDE / editor
 .idea/
@@ -47,6 +53,5 @@ storage/artwork/
 .DS_Store
 Thumbs.db
 
-/apps/web/package-lock.json
 /ffmpeg-8.1.2/
 /mpv-x86_64-v3/

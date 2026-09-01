@@ -1,8 +1,8 @@
 import { spawn } from "node:child_process";
 import { createConnection } from "node:net";
-import { join } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 import { existsSync } from "node:fs";
-import { rm } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { setTimeout as sleep } from "node:timers/promises";
 
 const IS_WIN = process.platform === "win32";
@@ -33,6 +33,71 @@ function resolvePlayerExec() {
 }
 
 const MPV_EXEC = resolvePlayerExec();
+const playerStateSetting = process.env.PLAYER_STATE_FILE || "../../storage/player-state.json";
+const PLAYER_STATE_PATH = isAbsolute(playerStateSetting)
+  ? playerStateSetting
+  : join(process.cwd(), playerStateSetting);
+
+async function readPersistedPlayerState() {
+  try {
+    return JSON.parse(await readFile(PLAYER_STATE_PATH, "utf8"));
+  } catch (error) {
+    if (error?.code !== "ENOENT" && !(error instanceof SyntaxError)) throw error;
+    return null;
+  }
+}
+
+async function persistPlayerState(state) {
+  await mkdir(dirname(PLAYER_STATE_PATH), { recursive: true });
+  const temporaryPath = `${PLAYER_STATE_PATH}.${process.pid}.tmp`;
+  await writeFile(temporaryPath, JSON.stringify(state), "utf8");
+  await rename(temporaryPath, PLAYER_STATE_PATH);
+}
+
+async function clearPersistedPlayerState(expectedConnectPath = null) {
+  if (expectedConnectPath) {
+    const persisted = await readPersistedPlayerState();
+    if (persisted?.connectPath && persisted.connectPath !== expectedConnectPath) return;
+  }
+  await rm(PLAYER_STATE_PATH, { force: true });
+}
+
+async function connectToPersistedIpc(path, timeoutMs = 1500) {
+  return new Promise((resolve) => {
+    const socket = createConnection(path);
+    const timeout = setTimeout(() => {
+      socket.destroy();
+      resolve(null);
+    }, timeoutMs);
+    socket.once("connect", () => {
+      clearTimeout(timeout);
+      resolve(socket);
+    });
+    socket.once("error", () => {
+      clearTimeout(timeout);
+      resolve(null);
+    });
+  });
+}
+
+function isProcessAlive(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function waitForProcessExit(pid, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (!isProcessAlive(pid)) return true;
+    await sleep(100);
+  }
+  return !isProcessAlive(pid);
+}
 
 /**
  * Returns the IPC arg to pass to mpv and the path Node uses to connect.
@@ -49,7 +114,7 @@ function makeSocketSpec(pid, ts) {
   return { ipcArg: sockPath, connectPath: sockPath, isNamedPipe: false };
 }
 
-export function createPlayerService({ prisma, io, emitQueueUpdated = async () => {} }) {
+export function createPlayerService({ prisma, io, emitQueueUpdated = async () => {}, deferStartup = false }) {
   console.info(`[jukebox-player] mpv executable: ${MPV_EXEC}`);
 
   let mpvProcess = null;
@@ -59,11 +124,18 @@ export function createPlayerService({ prisma, io, emitQueueUpdated = async () =>
   let state = "idle";
   let volume = 80;
   let isStopping = false;
+  let isAdvancing = false;
+  let advancementPromise = Promise.resolve();
+  let isStartupReady = !deferStartup;
   let isQueueStopped = false;
   let isLoopQueueEnabled = false;
   let playbackStartedAtMs = null;
   let elapsedBeforePauseSec = 0;
   let nextRequestId = 1;
+  let closeHandlingPromise = Promise.resolve();
+  let processClosePromise = Promise.resolve();
+  let persistStatePromise = Promise.resolve();
+  let orphanCleanupPromise = Promise.resolve();
   const pendingRequests = new Map();
   let preferredAudioOutputDeviceId = DEFAULT_AUDIO_OUTPUT_DEVICE_ID;
   let audioOutputApplyStatus = {
@@ -251,8 +323,29 @@ export function createPlayerService({ prisma, io, emitQueueUpdated = async () =>
   // ─── Playback control ────────────────────────────────────────────
 
   async function ensurePlaying() {
-    if (isStopping || isQueueStopped || mpvProcess || state === "playing" || state === "paused") return;
-    await playNext();
+    if (isAdvancing) return advancementPromise;
+    if (!isStartupReady || isStopping || isQueueStopped || mpvProcess) return;
+    isAdvancing = true;
+    advancementPromise = (async () => {
+      try {
+        await playNext();
+      } finally {
+        isAdvancing = false;
+      }
+    })();
+    return advancementPromise;
+  }
+
+  async function cancelPendingPlaybackStart(itemId) {
+    await prisma.queueItem.update({
+      where: { id: itemId },
+      data: { status: "queued" }
+    });
+    currentQueueItem = null;
+    state = "idle";
+    playbackStartedAtMs = null;
+    elapsedBeforePauseSec = 0;
+    await emitQueueUpdated();
   }
 
   async function playNext() {
@@ -260,7 +353,7 @@ export function createPlayerService({ prisma, io, emitQueueUpdated = async () =>
 
     const nextItem = await prisma.queueItem.findFirst({
       where: { status: "queued" },
-      orderBy: { createdAt: "asc" },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
       include: { song: true }
     });
 
@@ -276,6 +369,7 @@ export function createPlayerService({ prisma, io, emitQueueUpdated = async () =>
       io.emit("player:now-playing", null);
       return;
     }
+    if (isStopping || isQueueStopped) return;
 
     currentQueueItem = nextItem;
     exitStatusOverride = null;
@@ -288,6 +382,10 @@ export function createPlayerService({ prisma, io, emitQueueUpdated = async () =>
     });
 
     await emitQueueUpdated();
+    if (isStopping || isQueueStopped) {
+      await cancelPendingPlaybackStart(nextItem.id);
+      return;
+    }
 
     state = "playing";
     io.emit("player:now-playing", nextItem.song);
@@ -298,24 +396,54 @@ export function createPlayerService({ prisma, io, emitQueueUpdated = async () =>
     if (!socketSpec.isNamedPipe) {
       try { await rm(socketSpec.connectPath, { force: true }); } catch {}
     }
+    if (isStopping || isQueueStopped) {
+      await cancelPendingPlaybackStart(nextItem.id);
+      return;
+    }
+
+    persistStatePromise = persistPlayerState({
+      connectPath: socketSpec.connectPath,
+      isNamedPipe: socketSpec.isNamedPipe,
+      pid: null,
+      createdAt: new Date().toISOString()
+    });
+    await persistStatePromise;
+    if (isStopping || isQueueStopped) {
+      await clearPersistedPlayerState(socketSpec.connectPath);
+      await cancelPendingPlaybackStart(nextItem.id);
+      return;
+    }
 
     mpvProcess = spawn(MPV_EXEC, [
-      "--no-video",
       "--really-quiet",
       `--volume=${volume}`,
       `--audio-device=${preferredAudioOutputDeviceId}`,
       `--input-ipc-server=${socketSpec.ipcArg}`,
       nextItem.song.path
     ]);
-
+    const launchedProcess = mpvProcess;
+    processClosePromise = new Promise((resolve) => launchedProcess.once("close", resolve));
+    const capturedSocketSpec = socketSpec;
     mpvProcess.once("error", (err) => {
       if (!exitStatusOverride) exitStatusOverride = "error";
       io.emit("player:error", { message: `mpv failed to start: ${err.message}` });
     });
+    persistStatePromise = persistPlayerState({
+      connectPath: capturedSocketSpec.connectPath,
+      isNamedPipe: capturedSocketSpec.isNamedPipe,
+      pid: launchedProcess.pid,
+      createdAt: new Date().toISOString()
+    }).catch((error) => {
+      console.warn(`[jukebox-player] failed to persist player state: ${error.message}`);
+    });
 
     // Connect IPC asynchronously — mpv needs a moment to create the socket/pipe
     connectIpc(socketSpec.connectPath).then((sock) => {
-      if (!sock || !mpvProcess) return;
+      if (!sock) return;
+      if (mpvProcess !== launchedProcess) {
+        sock.destroy();
+        return;
+      }
       mpvSocket = sock;
       // Sync volume if it changed while IPC was still connecting
       sendCommand(["set_property", "volume", volume]).catch(() => {});
@@ -325,46 +453,57 @@ export function createPlayerService({ prisma, io, emitQueueUpdated = async () =>
 
     const capturedItemId = nextItem.id;
 
-    mpvProcess.once("exit", async () => {
-      if (mpvSocket) { mpvSocket.destroy(); mpvSocket = null; }
-      if (socketSpec && !socketSpec.isNamedPipe) {
-        try { await rm(socketSpec.connectPath, { force: true }); } catch {}
-      }
-
-      if (currentQueueItem?.id === capturedItemId) {
-        const finalStatus = exitStatusOverride || "played";
-        const shouldLoopCurrentItem = finalStatus === "played" && isLoopQueueEnabled;
-        try {
-          await prisma.queueItem.update({
-            where: { id: capturedItemId },
-            data: shouldLoopCurrentItem
-              ? {
-                  status: "queued",
-                  createdAt: new Date()
-                }
-              : { status: finalStatus }
-          });
-        } catch (error) {
-          // The queue item may already be removed (for example when deleting a song mid-playback).
-          if (error?.code !== "P2025") {
-            throw error;
-          }
+    mpvProcess.once("close", (code) => {
+      closeHandlingPromise = (async () => {
+        if (mpvSocket) { mpvSocket.destroy(); mpvSocket = null; }
+        if (!capturedSocketSpec.isNamedPipe) {
+          try { await rm(capturedSocketSpec.connectPath, { force: true }); } catch {}
         }
-        currentQueueItem = null;
-      }
+        await persistStatePromise.catch(() => {});
+        await clearPersistedPlayerState(capturedSocketSpec.connectPath).catch((error) => {
+          console.warn(`[jukebox-player] failed to clear player state: ${error.message}`);
+        });
 
-      mpvProcess = null;
-      playbackStartedAtMs = null;
-      elapsedBeforePauseSec = 0;
-      await emitQueueUpdated();
-      if (isStopping) return;
-      if (isQueueStopped) {
-        state = "idle";
-        emitState();
-        io.emit("player:now-playing", null);
-        return;
-      }
-      await playNext();
+        if (currentQueueItem?.id === capturedItemId) {
+          if (!exitStatusOverride && code !== 0) {
+            exitStatusOverride = "error";
+            io.emit("player:error", { message: `mpv exited with code ${code ?? "unknown"}` });
+          }
+          const finalStatus = exitStatusOverride || "played";
+          const shouldLoopCurrentItem = finalStatus === "played" && isLoopQueueEnabled;
+          try {
+            await prisma.queueItem.update({
+              where: { id: capturedItemId },
+              data: shouldLoopCurrentItem
+                ? {
+                    status: "queued",
+                    createdAt: new Date()
+                  }
+                : { status: finalStatus }
+            });
+          } catch (error) {
+            if (error?.code !== "P2025") {
+              io.emit("player:error", { message: `Failed to update completed queue item: ${error.message}` });
+            }
+          }
+          currentQueueItem = null;
+        }
+
+        if (mpvProcess === launchedProcess) mpvProcess = null;
+        playbackStartedAtMs = null;
+        elapsedBeforePauseSec = 0;
+        await emitQueueUpdated();
+        if (isStopping) return;
+        if (isQueueStopped) {
+          state = "idle";
+          emitState();
+          io.emit("player:now-playing", null);
+          return;
+        }
+        await ensurePlaying();
+      })().catch((error) => {
+        io.emit("player:error", { message: `Player cleanup failed: ${error.message}` });
+      });
     });
   }
 
@@ -472,9 +611,54 @@ export function createPlayerService({ prisma, io, emitQueueUpdated = async () =>
     emitState();
   }
 
+  async function terminateActivePlayback(finalStatus) {
+    const targetProcess = mpvProcess;
+    if (!targetProcess) {
+      await processClosePromise;
+      await closeHandlingPromise;
+      return;
+    }
+
+    exitStatusOverride = finalStatus;
+    let quitRequested = false;
+    if (mpvSocket) {
+      try {
+        await sendCommand(["quit"]);
+        quitRequested = true;
+      } catch {}
+    }
+    if (!quitRequested && targetProcess.exitCode === null) {
+      targetProcess.kill("SIGTERM");
+    }
+
+    let closed = await Promise.race([
+      processClosePromise.then(() => true),
+      sleep(3000).then(() => false)
+    ]);
+    if (!closed && targetProcess.exitCode === null) {
+      targetProcess.kill("SIGTERM");
+      closed = await Promise.race([
+        processClosePromise.then(() => true),
+        sleep(2000).then(() => false)
+      ]);
+    }
+    if (!closed && targetProcess.exitCode === null) {
+      targetProcess.kill("SIGKILL");
+      closed = await Promise.race([
+        processClosePromise.then(() => true),
+        sleep(2000).then(() => false)
+      ]);
+    }
+    if (!closed) {
+      throw new Error("mpv did not exit after forced termination");
+    }
+    await closeHandlingPromise;
+  }
+
   async function stop() {
     if (isStopping) return;
     isQueueStopped = true;
+    await advancementPromise;
 
     if (!mpvProcess) {
       currentQueueItem = null;
@@ -486,16 +670,17 @@ export function createPlayerService({ prisma, io, emitQueueUpdated = async () =>
       return;
     }
 
-    exitStatusOverride = "stopped";
-    if (mpvSocket) {
-      try { await sendCommand(["quit"]); return; } catch {}
-    }
-    mpvProcess.kill("SIGTERM");
+    await terminateActivePlayback("stopped");
   }
 
   async function start() {
     if (isStopping) return;
     isQueueStopped = false;
+    await ensurePlaying();
+  }
+
+  async function activate() {
+    isStartupReady = true;
     await ensurePlaying();
   }
 
@@ -507,12 +692,85 @@ export function createPlayerService({ prisma, io, emitQueueUpdated = async () =>
   async function shutdown() {
     isStopping = true;
     isQueueStopped = true;
-    if (!mpvProcess) return;
-    exitStatusOverride = "stopped";
-    if (mpvSocket) {
-      try { await sendCommand(["quit"]); return; } catch {}
+    await orphanCleanupPromise.catch(() => {});
+    await advancementPromise;
+    if (!mpvProcess) {
+      await processClosePromise;
+      await closeHandlingPromise;
+      return;
     }
-    mpvProcess.kill("SIGTERM");
+    await terminateActivePlayback("stopped");
+  }
+
+  async function performOrphanedPlaybackCleanup() {
+    const persisted = await readPersistedPlayerState();
+    if (!persisted?.connectPath || typeof persisted.connectPath !== "string") {
+      if (persisted) await clearPersistedPlayerState();
+      return false;
+    }
+
+    const persistedPid = typeof persisted.pid === "number"
+      && Number.isInteger(persisted.pid)
+      && persisted.pid > 0
+      ? persisted.pid
+      : null;
+    if (persistedPid && !isProcessAlive(persistedPid)) {
+      if (!persisted.isNamedPipe) await rm(persisted.connectPath, { force: true }).catch(() => {});
+      await clearPersistedPlayerState(persisted.connectPath);
+      return false;
+    }
+
+    let orphanedSocket = null;
+    for (let attempt = 0; attempt < 10 && !orphanedSocket; attempt += 1) {
+      orphanedSocket = await connectToPersistedIpc(persisted.connectPath, 300);
+      if (!orphanedSocket) await sleep(200);
+    }
+    if (!orphanedSocket) {
+      if (!persistedPid) {
+        throw new Error("Unresolved pre-launch mpv state; refusing to risk duplicate playback");
+      }
+      if (isProcessAlive(persistedPid)) {
+        throw new Error(`Cannot contact orphaned mpv process ${persistedPid}; refusing to start duplicate playback`);
+      }
+      await clearPersistedPlayerState(persisted.connectPath);
+      return false;
+    }
+
+    const socketClosedPromise = new Promise((resolve) => {
+      orphanedSocket.once("close", resolve);
+      orphanedSocket.once("error", resolve);
+    });
+    orphanedSocket.write(`${JSON.stringify({ command: ["quit"] })}\n`);
+    await Promise.race([socketClosedPromise, sleep(3000)]);
+
+    let exited = Number.isInteger(persistedPid)
+      ? await waitForProcessExit(persistedPid, 3000)
+      : orphanedSocket.destroyed;
+    if (!exited && isProcessAlive(persistedPid)) {
+      process.kill(persistedPid, "SIGTERM");
+      exited = await waitForProcessExit(persistedPid, 2000);
+    }
+    if (!exited && isProcessAlive(persistedPid)) {
+      process.kill(persistedPid, "SIGKILL");
+      exited = await waitForProcessExit(persistedPid, 2000);
+    }
+    orphanedSocket.destroy();
+    if (!exited) {
+      throw new Error(`Orphaned mpv process ${persistedPid || "unknown"} did not exit`);
+    }
+    if (!persisted.isNamedPipe) {
+      await rm(persisted.connectPath, { force: true }).catch(() => {});
+    }
+    await clearPersistedPlayerState(persisted.connectPath);
+    if (orphanedSocket) {
+      console.info(`[jukebox-player] stopped orphaned mpv process ${persisted.pid || "unknown"}`);
+    }
+    return Boolean(orphanedSocket);
+  }
+
+  function cleanupOrphanedPlayback() {
+    orphanCleanupPromise = performOrphanedPlaybackCleanup();
+    return orphanCleanupPromise;
   }
 
   return {
@@ -525,7 +783,9 @@ export function createPlayerService({ prisma, io, emitQueueUpdated = async () =>
     stop,
     start,
     setLoopQueue,
+    activate,
     setPreferredAudioOutputDevice,
+    cleanupOrphanedPlayback,
     shutdown,
     getState,
     getAudioOutputPreference

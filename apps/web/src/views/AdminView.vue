@@ -1,14 +1,10 @@
 <script setup>
-import { computed, ref, watch } from "vue";
+import { ref, watch } from "vue";
 import { useJukeboxStore } from "../stores/jukebox";
 
 const store = useJukeboxStore();
 const discoveryCommand = "mpv --audio-device=help --idle=yes --no-video --really-quiet";
 
-const pin = computed({
-  get: () => store.adminPin,
-  set: (value) => store.setAdminPin(value)
-});
 const volume = ref(store.player.volume || 80);
 const audioOutputDeviceId = ref(store.player.audioOutput?.deviceId || "auto");
 
@@ -33,6 +29,10 @@ function saveAudioOutputPreference() {
   store.saveAudioOutputPreference(audioOutputDeviceId.value);
 }
 
+function authorizeAdmin() {
+  store.requestAdminPin({ forcePrompt: true });
+}
+
 async function copyDiscoveryCommand() {
   try {
     if (navigator?.clipboard?.writeText) {
@@ -51,9 +51,7 @@ async function copyDiscoveryCommand() {
   <section class="card">
     <h2>Admin Controls</h2>
 
-    <p>
-      <input class="input" v-model="pin" placeholder="Admin PIN" type="password" />
-    </p>
+    <p><button class="button" @click="authorizeAdmin">Authorize Admin</button></p>
 
     <p>
       <input class="progress-slider" v-model.number="volume" type="range" min="0" max="100" step="1" />

@@ -22,14 +22,21 @@ model Song {
   artworkPath String?
   duration   Int?
   uploadedBy String?
+  sourceProvider String?
+  sourceId   String?
+  sourceUrl  String?
+  licenseUrl String?
   createdAt  DateTime    @default(now())
   queueItems QueueItem[]
+  moodSongs  MoodSong[]
+
+  @@unique([sourceProvider, sourceId])
 }
 
 model QueueItem {
   id          String   @id @default(uuid())
   songId      String
-  song        Song     @relation(fields: [songId], references: [id])
+  song        Song     @relation(fields: [songId], references: [id], onDelete: Cascade)
   requestedBy String?
   requesterKey String   @default("")
   status      String   @default("queued")
@@ -46,3 +53,36 @@ model AppSetting {
   updatedAt DateTime @updatedAt
 }
 
+model Mood {
+  id        String     @id @default(uuid())
+  name      String
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  songs     MoodSong[]
+
+  @@index([name])
+}
+
+model MoodSong {
+  id       String @id @default(uuid())
+  moodId   String
+  mood     Mood   @relation(fields: [moodId], references: [id], onDelete: Cascade)
+  songId   String
+  song     Song   @relation(fields: [songId], references: [id], onDelete: Cascade)
+  position Int
+
+  @@unique([moodId, position])
+  @@index([moodId, position])
+  @@index([songId])
+}
+
+model FolderImport {
+  id          String   @id
+  sourceName  String
+  workingName String
+  status      String   @default("processing")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([status])
+}

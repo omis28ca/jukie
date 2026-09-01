@@ -45,7 +45,7 @@ function removeSong(songId, title) {
       <input class="input" v-model="query" placeholder="Search title, artist, album, or genre" />
     </p>
     <button class="button" @click="store.fetchSongs" :disabled="store.loading.songs">Reload Library</button>
-    <p><small>Set Admin PIN on the Admin page to enable delete actions.</small></p>
+    <p><small>Delete actions will request the admin PIN with the keypad.</small></p>
   </section>
 
   <section v-if="store.loading.songs" class="card">
@@ -74,7 +74,7 @@ function removeSong(songId, title) {
       <button
         class="button button-danger"
         @click="removeSong(song.id, song.title)"
-        :disabled="store.loading.admin || !store.adminPin"
+        :disabled="store.loading.admin"
       >
         Delete
       </button>

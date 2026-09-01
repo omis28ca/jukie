@@ -8,8 +8,9 @@ Vue 3 + Vite + Pinia frontend for the Office Jukebox.
 - Featured releases plus search, genre/artwork filters, sorting, and requester names
 - Live now-playing state and shared queue updates via Socket.IO
 - Drag-and-drop upload panel with extracted metadata and artwork preview
-- Queue drawer with requester details, looping, refresh, and clear-upcoming controls
-- PIN-protected pause, resume, start, stop, skip, seek, volume, delete, and output-device controls
+- Queue drawer with requester details, play-next, per-item removal, looping, refresh, and clear-upcoming controls
+- In-browser audio/video previews that do not affect room playback
+- Listener pause, resume, skip, seek, and loop controls plus PIN-protected start, stop, volume, delete, clear, and output-device controls
 - Responsive desktop, tablet, and mobile layouts with keyboard-accessible controls
 
 The required URLs remain available as entry points into the same workspace:
@@ -33,7 +34,7 @@ If omitted, the frontend calls the same origin.
 ## Run
 
 ```powershell
-npm install
+npm ci
 npm run dev
 ```
 

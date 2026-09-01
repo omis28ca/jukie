@@ -33,6 +33,49 @@ export const api = {
     return request("/api/songs");
   },
 
+  searchExternal(provider, query) {
+    const params = new URLSearchParams({ provider, q: query });
+    return request(`/api/external/search?${params.toString()}`);
+  },
+
+  importExternal(provider, sourceId, sourceFile) {
+    return request("/api/external/import", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ provider, sourceId, sourceFile })
+    });
+  },
+
+  listMoods() {
+    return request("/api/moods");
+  },
+
+  selectMood(moodId, requestedBy) {
+    return request(`/api/moods/${encodeURIComponent(moodId)}/select`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ requestedBy })
+    });
+  },
+
+  createMood(name, songIds, pin) {
+    return request("/api/moods", {
+      method: "POST",
+      headers: {
+        "x-admin-pin": pin,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ name, songIds })
+    });
+  },
+
+  deleteMood(moodId, pin) {
+    return request(`/api/moods/${encodeURIComponent(moodId)}`, {
+      method: "DELETE",
+      headers: { "x-admin-pin": pin }
+    });
+  },
+
   getQueue() {
     return request("/api/queue");
   },
@@ -50,11 +93,17 @@ export const api = {
     });
   },
 
-  addToQueue(songId, requestedBy) {
+  addToQueue(songId, requestedBy, playNext = false) {
     return request("/api/queue", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ songId, requestedBy })
+      body: JSON.stringify({ songId, requestedBy, playNext })
+    });
+  },
+
+  removeQueueItem(queueItemId) {
+    return request(`/api/queue/${encodeURIComponent(queueItemId)}`, {
+      method: "DELETE"
     });
   },
 
@@ -111,4 +160,3 @@ export const api = {
     });
   }
 };
-

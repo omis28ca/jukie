@@ -4,10 +4,6 @@ import { useJukeboxStore } from "../stores/jukebox";
 
 const store = useJukeboxStore();
 const queuedItems = computed(() => store.queuedItems);
-const pin = computed({
-  get: () => store.adminPin,
-  set: (value) => store.setAdminPin(value)
-});
 
 const tickMs = ref(Date.now());
 const positionAnchorMs = ref(Date.now());
@@ -238,10 +234,6 @@ onUnmounted(() => {
       </div>
     </div>
     <p v-else>No song playing.</p>
-
-    <p>
-      <input class="input" v-model="pin" placeholder="Admin PIN" type="password" />
-    </p>
 
     <p>
       <button class="button" @click="startQueue" :disabled="!canStartQueue">
