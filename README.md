@@ -22,6 +22,7 @@ library, and a basic four-digit PIN for admin actions.
 - [Data Model](#data-model)
 - [HTTP API](#http-api)
 - [WebSocket Contract](#websocket-contract)
+- [Deploying on Ubuntu](#deploying-on-ubuntu)
 - [Operational Notes](#operational-notes)
 
 ---
@@ -603,6 +604,49 @@ Socket.IO is used for live updates. Clients pass their name (and PIN, when known
 - `player:refresh`
 - `moods:refresh`
 - `chat:refresh`
+
+---
+
+## Deploying on Ubuntu
+
+Single process: the server serves the built web app, so only `apps/server` needs to run.
+
+```bash
+sudo apt update
+sudo apt install -y git nodejs npm mpv ffmpeg
+# optional, only for the YouTube download tab
+sudo apt install -y yt-dlp
+
+git clone https://github.com/omis28ca/jukie.git
+cd jukie/apps/server
+cp .env.example .env
+$EDITOR .env          # set ADMIN_PIN, HOST=0.0.0.0, PUBLIC_URL, STORAGE_ROOT
+npm install
+npm run prisma:generate
+npm run prisma:push
+
+cd ../web
+npm install
+npm run build         # writes apps/web/dist, which the server picks up automatically
+
+cd ../server
+npm start             # or: npx pm2 start ecosystem.config.cjs
+```
+
+Notes for a headless box:
+
+- Playback happens on the **server**, so the machine needs a working audio output and the service
+  user must be in the `audio` group. Pick the device from `/admin` once it is running.
+- `mpv`, `ffprobe` and `ffmpeg` are expected on `PATH`; override with `PLAYER_EXEC`,
+  `AUDIO_PROBE_EXEC` and `AUDIO_TRANSCODE_EXEC` if they live elsewhere.
+- `STORAGE_ROOT` (or the drive picker in `/admin`) should point at the mount that holds the music —
+  `uploads/`, `artwork/` and `imports/` are created inside it.
+- Open the port for the LAN: `sudo ufw allow 3000/tcp`. Set `PUBLIC_URL` so the join QR code points
+  at the LAN address rather than `localhost`, and set `TRUST_PROXY` when nginx sits in front.
+- `ecosystem.config.cjs` is ready for pm2 (`pm2 start ecosystem.config.cjs && pm2 save && pm2 startup`);
+  a plain systemd unit running `node src/index.js` from `apps/server` works just as well.
+- Pull updates with `git pull`, then re-run `npm install`, `npm run prisma:push` (server) and
+  `npm run build` (web) before restarting.
 
 ---
 
