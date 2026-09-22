@@ -1,0 +1,57 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+apps/web/dist/
+apps/server/dist/
+coverage/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+
+# Runtime / temp
+*.pid
+*.pid.lock
+*.seed
+*.tmp
+*.temp
+
+# Database artifacts
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# Uploaded media and generated storage
+storage/uploads/*
+!storage/uploads/.gitkeep
+
+
+
+storage/artwork/*
+!storage/artwork/.gitkeep
+
+storage/imports/*
+!storage/imports/.gitkeep
+storage/player-state.json
+storage/player-state.json.*.tmp
+
+# IDE / editor
+.idea/
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+/ffmpeg-8.1.2/
+/mpv-x86_64-v3/
