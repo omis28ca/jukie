@@ -388,8 +388,11 @@ The home screen carries a small live chat so the room can talk without shouting 
   `removed`, `cleared`, `replaced`, or `error`.
 - Requester identity: the name entered on the join screen (sent as the `x-jukebox-user` header),
   with fallback `ip:<request.ip>`.
-- Queue order: tracks flagged `playNext` play first, then oldest request first.
-- Queue fairness: up to 20 active `queued`/`playing` requests per requester.
+- Queue order: tracks flagged `playNext` still play first (FIFO), then the remaining queue is
+  arranged with artist-spacing so the same artist does not play back-to-back when an alternative
+  exists.
+- Admins can reshuffle the upcoming queue from Home with **Shuffle queue** (keeps `playNext` tracks
+  pinned at the front).
 - Loop mode: tracks that finish naturally return to the tail of the queue instead of falling off.
 - Downvoting removes a track immediately (and skips it when it is playing), removes it from the
   active mood, and each person may vote once per queue item.
@@ -504,6 +507,7 @@ Errors are returned as `{ "error": "message" }` with a matching HTTP status.
 | `POST` | `/api/queue` | Enqueue `{ songId, playNext? }` |
 | `DELETE` | `/api/queue/:id` | Remove one upcoming item (requester or admin) |
 | `DELETE` | `/api/queue` | Admin clears everything; a guest clears only their own entries |
+| `POST` | `/api/queue/shuffle` | Admin — reshuffles upcoming tracks (keeps `playNext` pins first) |
 | `POST` | `/api/queue/:id/vote` | Downvote (removes the track) |
 | `POST` | `/api/queue/:id/upvote` | Upvote (play next + save to the active mood) |
 | `POST` | `/api/queue/:id/play-next` | Admin or requester |

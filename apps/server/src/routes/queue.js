@@ -10,6 +10,7 @@ import {
   getQueueSnapshot,
   playNow,
   removeQueueItem,
+  shuffleQueue,
   setPlayNext,
   upvoteQueueItem
 } from "../services/queue.js";
@@ -45,6 +46,10 @@ export async function queueRoutes(fastify) {
 
   fastify.delete("/api/queue", async (request) => {
     return clearQueue(getRequester(request));
+  });
+
+  fastify.post("/api/queue/shuffle", async (request) => {
+    return shuffleQueue(getRequester(request));
   });
 
   fastify.post("/api/queue/:id/vote", async (request) => {

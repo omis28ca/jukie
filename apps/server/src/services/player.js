@@ -5,6 +5,7 @@ import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { setTimeout as sleep } from "node:timers/promises";
 import { config } from "../config.js";
 import { mapSong } from "../lib/serializers.js";
+import { orderQueuedItems } from "./queue-order.js";
 
 const IS_WIN = process.platform === "win32";
 const DEFAULT_AUDIO_OUTPUT_DEVICE_ID = "auto";
@@ -124,6 +125,7 @@ export function createPlayerService({ prisma, io, emitQueueUpdated = async () =>
   let orphanCleanupPromise = Promise.resolve();
   const pendingRequests = new Map();
   let preferredAudioOutputDeviceId = DEFAULT_AUDIO_OUTPUT_DEVICE_ID;
+  let lastPlayedArtist = "";
   let audioOutputApplyStatus = {
     applied: null,
     message: "Using system default output device.",
@@ -338,11 +340,13 @@ export function createPlayerService({ prisma, io, emitQueueUpdated = async () =>
   async function playNext() {
     if (isStopping || isQueueStopped) return;
 
-    const nextItem = await prisma.queueItem.findFirst({
+    const queuedItems = await prisma.queueItem.findMany({
       where: { status: "queued" },
-      orderBy: [{ playNext: "desc" }, { createdAt: "asc" }, { id: "asc" }],
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
       include: { song: true }
     });
+    const nextItem =
+      orderQueuedItems(queuedItems, { previousArtist: currentQueueItem?.song?.artist || lastPlayedArtist })[0] ?? null;
 
     if (!nextItem) {
       currentQueueItem = null;
@@ -474,6 +478,7 @@ export function createPlayerService({ prisma, io, emitQueueUpdated = async () =>
               io.emit("player:error", { message: `Failed to update completed queue item: ${error.message}` });
             }
           }
+          lastPlayedArtist = currentQueueItem.song?.artist || "";
           currentQueueItem = null;
         }
 

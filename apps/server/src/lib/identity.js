@@ -21,7 +21,7 @@ export function isAdminRequest(request) {
 /**
  * Resolves the caller identity. The display name comes from the join screen
  * (`x-jukebox-user`) or an explicit `requestedBy` body field; the stable key falls back to the
- * client IP so anonymous guests still get per-person queue limits and one vote per track.
+ * client IP so anonymous guests still get stable per-person attribution and one vote per track.
  */
 export function getRequester(request) {
   const headerName = decodeHeaderValue(request.headers["x-jukebox-user"]);

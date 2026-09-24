@@ -92,6 +92,18 @@ export const useQueueStore = defineStore('queue', {
         throw error;
       }
     },
+    async shuffle() {
+      const ui = useUiStore();
+      try {
+        const result = await api.post('/api/queue/shuffle');
+        ui.success('Queue shuffled');
+        await this.fetch();
+        return result;
+      } catch (error) {
+        ui.error(error);
+        throw error;
+      }
+    },
     async itemAction(id, action, body, successMessage) {
       const ui = useUiStore();
       try {

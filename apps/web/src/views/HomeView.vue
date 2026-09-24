@@ -9,21 +9,37 @@ import { usePlayerStore } from '../stores/player';
 import { useQueueStore } from '../stores/queue';
 import { useLibraryStore } from '../stores/library';
 import { useMoodsStore } from '../stores/moods';
+import { useSessionStore } from '../stores/session';
 import { formatTime } from '../lib/format';
 
 const player = usePlayerStore();
 const queue = useQueueStore();
 const library = useLibraryStore();
 const moods = useMoodsStore();
+const session = useSessionStore();
 
 const scrubbing = ref(false);
 const scrubValue = ref(0);
+const upNextSearch = ref('');
+const shufflingQueue = ref(false);
 
 const duration = computed(() => Number(player.nowPlaying?.duration) || 0);
 const position = computed(() => (scrubbing.value ? scrubValue.value : player.positionSeconds));
 const progressPct = computed(() => (duration.value > 0 ? (position.value / duration.value) * 100 : 0));
 
 const upcoming = computed(() => queue.queue.filter((item) => item.status !== 'playing'));
+const filteredUpcoming = computed(() => {
+  const term = upNextSearch.value.trim().toLowerCase();
+  if (!term) return upcoming.value;
+  return upcoming.value.filter((item) => {
+    const song = item.song || {};
+    const haystack = [song.title, song.artist, song.album, item.requestedBy]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+    return haystack.includes(term);
+  });
+});
 const nowItem = computed(() => queue.nowPlaying);
 
 onMounted(() => {
@@ -51,6 +67,18 @@ async function commitScrub() {
     await player.seek(value);
   } catch {
     /* toast already raised */
+  }
+}
+
+async function shuffleQueue() {
+  if (shufflingQueue.value) return;
+  shufflingQueue.value = true;
+  try {
+    await queue.shuffle();
+  } catch {
+    /* toast already raised */
+  } finally {
+    shufflingQueue.value = false;
   }
 }
 </script>
@@ -140,7 +168,29 @@ async function commitScrub() {
     <section class="section">
       <div class="section-head">
         <h2>Up next</h2>
-        <span class="sub">{{ upcoming.length }} in the queue</span>
+        <span class="sub">
+          {{ filteredUpcoming.length }} in the queue
+          <template v-if="upNextSearch.trim()"> (filtered from {{ upcoming.length }}) </template>
+        </span>
+        <button
+          v-if="session.isAdmin"
+          class="btn btn-sm"
+          type="button"
+          :disabled="shufflingQueue || upcoming.length < 2"
+          @click="shuffleQueue"
+        >
+          {{ shufflingQueue ? 'Shuffling…' : 'Shuffle queue' }}
+        </button>
+      </div>
+      <div class="upnext-tools">
+        <label class="faint" for="upnext-search">Search queue</label>
+        <input
+          id="upnext-search"
+          v-model="upNextSearch"
+          type="search"
+          placeholder="Search title, artist, album or requester…"
+          autocomplete="off"
+        />
       </div>
 
       <div v-if="queue.loading && !queue.loaded" class="empty">Loading the queue…</div>
@@ -148,9 +198,12 @@ async function commitScrub() {
         The queue is empty. Head to the
         <RouterLink to="/library">library</RouterLink> and add something.
       </div>
+      <div v-else-if="!filteredUpcoming.length" class="empty">
+        No matches in the queue for “{{ upNextSearch }}”.
+      </div>
       <ul v-else class="qlist panel">
         <QueueItemRow
-          v-for="(item, index) in upcoming"
+          v-for="(item, index) in filteredUpcoming"
           :key="item.id"
           :item="item"
           :index="index"
@@ -286,6 +339,12 @@ async function commitScrub() {
 
 .qlist {
   padding: 0.5rem;
+}
+
+.upnext-tools {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.5rem 0 0.75rem;
 }
 
 @media (max-width: 860px) {

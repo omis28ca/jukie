@@ -116,7 +116,6 @@ export const config = {
     topicPrefix: String(process.env.MQTT_TOPIC_PREFIX || "jukie").trim().replace(/\/+$/, "") || "jukie"
   },
 
-  maxActiveQueueItemsPerRequester: 20,
   maxMoodSongs: 10000,
   activeQueueStatuses: ["queued", "playing"]
 };

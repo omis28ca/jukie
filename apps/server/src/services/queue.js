@@ -4,8 +4,7 @@ import { httpError } from "../lib/http.js";
 import { mapHistoryItem, mapQueueItem } from "../lib/serializers.js";
 import { runtime } from "../runtime.js";
 import { getActiveMoodId } from "./settings.js";
-
-const QUEUE_ORDER = [{ playNext: "desc" }, { createdAt: "asc" }, { id: "asc" }];
+import { orderQueuedItems } from "./queue-order.js";
 
 /** Statuses of tracks that actually reached the speakers, newest first in the history feed. */
 export const HISTORY_STATUSES = ["played", "skipped"];
@@ -43,16 +42,18 @@ export async function getHistory({ limit } = {}) {
 export async function getActiveQueueRaw() {
   return prisma.queueItem.findMany({
     where: { status: { in: config.activeQueueStatuses } },
-    orderBy: QUEUE_ORDER,
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     include: { song: true, votes: true }
   });
 }
 
 export function snapshotQueue(rawItems, viewer = null) {
   const nowPlaying = rawItems.find((item) => item.status === "playing") || null;
+  const queued = rawItems.filter((item) => item.status === "queued");
+  const orderedQueued = orderQueuedItems(queued, { previousArtist: nowPlaying?.song?.artist });
 
   return {
-    queue: rawItems.filter((item) => item.status === "queued").map((item) => mapQueueItem(item, viewer)),
+    queue: orderedQueued.map((item) => mapQueueItem(item, viewer)),
     nowPlaying: mapQueueItem(nowPlaying, viewer)
   };
 }
@@ -91,13 +92,6 @@ export async function enqueueSong({ songId, viewer, playNext = false }) {
   const song = await prisma.song.findUnique({ where: { id: normalizedSongId }, select: { id: true } });
   if (!song) throw httpError(404, "Song not found");
 
-  const activeRequestCount = await prisma.queueItem.count({
-    where: { requesterKey: viewer.key, status: { in: config.activeQueueStatuses } }
-  });
-  if (activeRequestCount >= config.maxActiveQueueItemsPerRequester) {
-    throw httpError(409, `You can only have up to ${config.maxActiveQueueItemsPerRequester} active songs in the queue`);
-  }
-
   const item = await prisma.queueItem.create({
     data: {
       songId: normalizedSongId,
@@ -129,6 +123,41 @@ export async function clearQueue(viewer) {
 
   await runtime.realtime.broadcastQueue();
   return { ok: true, clearedCount: result.count };
+}
+
+/**
+ * Randomizes the upcoming queue order while preserving `playNext` pins.
+ */
+export async function shuffleQueue(viewer) {
+  if (!viewer?.isAdmin) {
+    throw httpError(403, "Only an admin can shuffle the queue");
+  }
+
+  const queued = await prisma.queueItem.findMany({
+    where: { status: "queued", playNext: false },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    select: { id: true }
+  });
+  if (queued.length < 2) return { ok: true, shuffledCount: queued.length };
+
+  const shuffled = [...queued];
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+  }
+
+  const baseMs = Date.now();
+  await prisma.$transaction(
+    shuffled.map((item, index) =>
+      prisma.queueItem.update({
+        where: { id: item.id },
+        data: { createdAt: new Date(baseMs + index) }
+      })
+    )
+  );
+
+  await runtime.realtime.broadcastQueue();
+  return { ok: true, shuffledCount: shuffled.length };
 }
 
 export async function setPlayNext(queueItemId, viewer, enabled) {
