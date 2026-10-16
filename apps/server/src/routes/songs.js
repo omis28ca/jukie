@@ -88,8 +88,6 @@ export async function songRoutes(fastify) {
     return {
       maxUploadMb: config.maxUploadMb,
       allowedExtensions: [...config.allowedAudioExtensions],
-      externalSearchEnabled: true,
-      youtubeSearchEnabled: Boolean(config.youtubeApiKey),
       mqttEnabled: Boolean(config.mqtt.url)
     };
   });

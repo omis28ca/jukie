@@ -35,8 +35,6 @@ function splitArgs(value) {
 }
 
 const maxUploadMb = positiveNumber(process.env.MAX_UPLOAD_MB, 5 * 1024);
-const externalImportMaxMb = positiveNumber(process.env.EXTERNAL_IMPORT_MAX_MB, 250);
-const externalLibraryMaxMb = positiveNumber(process.env.EXTERNAL_LIBRARY_MAX_MB, 5120);
 const trustProxySetting = String(process.env.TRUST_PROXY || "").trim();
 
 /**
@@ -81,9 +79,6 @@ export const config = {
 
   maxUploadMb,
   uploadMaxBytes: maxUploadMb * 1024 * 1024,
-  externalImportMaxBytes: externalImportMaxMb * 1024 * 1024,
-  externalLibraryMaxBytes: externalLibraryMaxMb * 1024 * 1024,
-  youtubeApiKey: String(process.env.YOUTUBE_API_KEY || "").trim(),
 
   allowedAudioExtensions: new Set(
     String(process.env.ALLOWED_AUDIO_EXTENSIONS || ".mp3,.mp4,.wav,.m4a,.flac")

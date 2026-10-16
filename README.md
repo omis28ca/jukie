@@ -40,8 +40,6 @@ library, and a basic four-digit PIN for admin actions.
 - Select a mood playlist to play.
 - Upload audio or video (`.mp3`, `.mp4`, `.wav`, `.m4a`, `.flac`) via drag/drop, with a metadata
   preview after upload.
-- Search external sources and import public-domain tracks from the Internet Archive (YouTube search
-  results are links only — see [External search](#external-search)).
 - Download a YouTube link with yt-dlp straight into the folder-import inbox, with live progress and
   cancel (see [YouTube downloads](#youtube-downloads-yt-dlp)).
 - Watch now-playing and queue updates live.
@@ -93,7 +91,7 @@ apps/
     prisma/          Prisma schema and SQLite database
     src/
       routes/        HTTP route plugins (songs, queue, player, moods, admin, external, chat, info)
-      services/      player (mpv IPC), queue, moods, library, imports, external music, yt-dlp, chat, MQTT
+      services/      player (mpv IPC), queue, moods, library, imports, yt-dlp, chat, MQTT
       media/         ffprobe/ffmpeg metadata and artwork extraction
       lib/           identity, serializers, HTTP helpers
   web/               Vue 3 + Vite single-page app served to guests
@@ -112,7 +110,7 @@ and the web app.
 | Route | Purpose |
 | --- | --- |
 | `/` | Now playing, queue, room chat, transport and admin controls |
-| `/library` | Searchable song list, enqueue, preview, external search, YouTube download, delete (admin) |
+| `/library` | Searchable song list, enqueue, preview, YouTube download, delete (admin) |
 | `/upload` | Drag/drop uploader |
 | `/moods` | Browse moods and their songs, select a mood to play |
 | `/admin` | PIN entry, volume, moods, mood-from-history, audio output, storage management |
@@ -206,14 +204,6 @@ stored in the database and takes precedence over these variables on the next sta
 | `IMPORT_DIR` | `<STORAGE_ROOT>/imports` | Watched drop folder for mood imports |
 | `IMPORT_SETTLE_MS` | `10000` | How long a folder must be unchanged before import starts |
 | `IMPORT_POLL_MS` | `5000` | Poll interval for the import watcher |
-
-### External search and imports
-
-| Variable | Default | Description |
-| --- | --- | --- |
-| `YOUTUBE_API_KEY` | unset | Enables official YouTube Data API v3 search (links only) |
-| `EXTERNAL_IMPORT_MAX_MB` | `250` | Per-file limit for public-domain imports |
-| `EXTERNAL_LIBRARY_MAX_MB` | `5120` | Total storage quota for external imports |
 
 ### YouTube downloads (yt-dlp)
 
@@ -318,24 +308,9 @@ For slow or intermittent network copies, copy the folder with an `.uploading` su
 when the copy finishes (for example, `Road Trip.uploading` → `Road Trip`). Folders with that suffix
 are ignored until renamed. Alternatively, increase `IMPORT_SETTLE_MS`.
 
-### External search
-
-Library search can query Internet Archive audio that is explicitly marked CC0 or Public Domain Mark.
-The server returns exact MP3 tracks, revalidates the selected file and its license metadata,
-downloads it into managed storage, records the source and license URLs, and blocks duplicate
-imports. Imports are serialized, rate-limited per IP, and bounded by `EXTERNAL_IMPORT_MAX_MB` and
-`EXTERNAL_LIBRARY_MAX_MB`.
-
-Internet Archive metadata is uploader-supplied, so users should review the linked source and license
-attribution.
-
-Setting `YOUTUBE_API_KEY` enables official YouTube search results. Search results stay links only —
-nothing is downloaded from a search hit. Downloading a YouTube link is a separate, deliberate action
-on the **YouTube download** tab described below.
-
 ### YouTube downloads (yt-dlp)
 
-The third tab in `/library` accepts a YouTube link and hands it to
+The second tab in `/library` accepts a YouTube link and hands it to
 [yt-dlp](https://github.com/yt-dlp/yt-dlp), which writes the result into the folder-import inbox so
 the normal [folder importer](#folder-imports-one-folder-per-mood) turns it into a mood.
 
@@ -561,12 +536,10 @@ Errors are returned as `{ "error": "message" }` with a matching HTTP status.
 | `GET` | `/api/admin/storage/location` | Current music folder, free/total space, and the detected drives |
 | `POST` | `/api/admin/storage/location` | `{ root, move? }` or `{ useDefault: true, move? }` to repoint the library |
 
-### External music
+### YouTube downloads
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| `GET` | `/api/external/search?q=&provider=` | Internet Archive (importable) and YouTube (links only) |
-| `POST` | `/api/external/import` | `{ provider, id }` or `{ provider, sourceId, sourceFile }` |
 | `GET` | `/api/external/youtube` | yt-dlp availability, version and limits |
 | `GET` | `/api/external/youtube/jobs` | Recent download jobs (newest first) |
 | `POST` | `/api/external/youtube/download` | `{ url, folderName?, mode: "audio"\|"video", playlist? }` → `202` with the job |

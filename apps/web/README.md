@@ -64,7 +64,7 @@ When `VITE_MQTT_URL` is set the app:
 | Route | Purpose |
 | --- | --- |
 | `/` | Now playing hero, live queue with per-item actions, moods row, recently added row |
-| `/library` | Debounced search, genre chips, card grid with add/play-next/preview/delete, external search tab |
+| `/library` | Debounced search, genre chips, card grid with add/play-next/preview/delete, YouTube download tab |
 | `/upload` | Drag & drop uploader with progress and a metadata preview |
 | `/moods` | Browse moods and their songs, select a mood to play |
 | `/admin` | PIN entry, volume, queue start/stop/clear, mood CRUD, audio output, storage management |
