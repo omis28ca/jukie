@@ -172,7 +172,7 @@ const volumeIcon = computed(() => {
   position: fixed;
   left: 0;
   right: 0;
-  bottom: 0;
+  bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px));
   height: var(--player-h);
   z-index: 95;
   display: grid;
@@ -341,7 +341,7 @@ const volumeIcon = computed(() => {
     grid-template-rows: auto auto;
     height: auto;
     gap: 0.35rem 0.75rem;
-    padding: 0.5rem 0.75rem calc(0.5rem + env(safe-area-inset-bottom, 0px));
+    padding: 0.5rem 0.75rem;
   }
 
   .pb-track {

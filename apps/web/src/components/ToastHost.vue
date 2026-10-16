@@ -21,7 +21,7 @@ const ui = useUiStore();
 .toast-host {
   position: fixed;
   right: 16px;
-  bottom: calc(var(--player-h) + 16px);
+  bottom: calc(var(--player-h) + var(--tabbar-h) + 16px);
   z-index: 120;
   display: flex;
   flex-direction: column;

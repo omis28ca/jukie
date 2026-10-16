@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
-import AppSidebar from './components/AppSidebar.vue';
+import BottomTabs from './components/BottomTabs.vue';
 import PlayerBar from './components/PlayerBar.vue';
 import ToastHost from './components/ToastHost.vue';
 import JoinGate from './components/JoinGate.vue';
@@ -14,6 +14,7 @@ import { useMoodsStore } from './stores/moods';
 import { useMqttStore } from './stores/mqtt';
 import { useYoutubeStore } from './stores/youtube';
 import { useChatStore } from './stores/chat';
+import { initials } from './lib/format';
 import { disposeSocket, initSocket, updateSocketIdentity } from './lib/socket';
 
 const route = useRoute();
@@ -93,7 +94,6 @@ onBeforeUnmount(() => {
 
 function onGateDone() {
   changingName.value = false;
-  ui.closeSidebar();
   if (booted.value) {
     // Re-fetch so ownership flags (isMine / hasDownvoted) reflect the new identity.
     queue.fetch();
@@ -103,23 +103,21 @@ function onGateDone() {
 
 <template>
   <div class="app-shell">
-    <AppSidebar @change-name="changingName = true" />
-
     <div class="app-main">
       <header class="topbar">
-        <button
-          class="btn btn-icon hamburger"
-          type="button"
-          :aria-expanded="ui.sidebarOpen"
-          aria-label="Toggle navigation menu"
-          @click="ui.toggleSidebar()"
-        >
-          <span aria-hidden="true">☰</span>
-        </button>
         <h1 class="topbar-title">{{ pageTitle }}</h1>
         <span v-if="!ui.connected" class="chip offline" title="Live updates unavailable">
           Offline
         </span>
+        <button
+          class="avatar"
+          type="button"
+          :title="`${session.name || 'Guest'} · Change name`"
+          aria-label="Change name"
+          @click="changingName = true"
+        >
+          {{ initials(session.name) }}
+        </button>
       </header>
 
       <main class="content">
@@ -128,6 +126,7 @@ function onGateDone() {
     </div>
 
     <PlayerBar />
+    <BottomTabs />
     <ToastHost />
 
     <JoinGate
@@ -145,8 +144,7 @@ function onGateDone() {
 }
 
 .app-main {
-  margin-left: var(--sidebar-w);
-  padding-bottom: calc(var(--player-h) + 16px);
+  padding-bottom: calc(var(--player-h) + var(--tabbar-h) + 16px);
   min-height: 100vh;
 }
 
@@ -164,18 +162,34 @@ function onGateDone() {
 }
 
 .topbar-title {
+  flex: 1;
   font-size: 1.15rem;
   font-weight: 650;
 }
 
 .offline {
-  margin-left: auto;
   color: var(--warn);
   border-color: #4a3d1c;
 }
 
-.hamburger {
-  display: none;
+.avatar {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface-3);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.avatar:hover {
+  color: var(--text);
 }
 
 .content {
@@ -185,12 +199,7 @@ function onGateDone() {
 
 @media (max-width: 900px) {
   .app-main {
-    margin-left: 0;
-    padding-bottom: 180px;
-  }
-
-  .hamburger {
-    display: inline-flex;
+    padding-bottom: calc(180px + var(--tabbar-h));
   }
 
   .topbar {
