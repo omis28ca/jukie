@@ -20,6 +20,18 @@ function normalizeAudioOutputDeviceId(value) {
 }
 
 const MPV_EXEC = config.playerExec;
+// ~15s of retries (each attempt waits 150ms); mpv can take several seconds to open its socket.
+const IPC_CONNECT_ATTEMPTS = 100;
+
+/**
+ * mpv's environment without display variables. A server started from an SSH session with X11
+ * forwarding inherits DISPLAY, and mpv then stalls for seconds trying to reach that display before
+ * it opens its IPC socket — long enough that volume and pause stopped reaching it.
+ */
+function playerEnv() {
+  const { DISPLAY, WAYLAND_DISPLAY, ...env } = process.env;
+  return env;
+}
 const playerStateSetting = process.env.PLAYER_STATE_FILE || "../../storage/player-state.json";
 const PLAYER_STATE_PATH = isAbsolute(playerStateSetting)
   ? playerStateSetting
@@ -217,8 +229,8 @@ export function createPlayerService({ prisma, io, emitQueueUpdated = async () =>
    * Connect to mpv's Unix IPC socket, retrying until mpv creates it.
    * Returns the net.Socket on success or null after all retries.
    */
-  async function connectIpc(path, maxAttempts = 20) {
-    for (let i = 0; i < maxAttempts; i++) {
+  async function connectIpc(path, maxAttempts = 20, shouldContinue = () => true) {
+    for (let i = 0; i < maxAttempts && shouldContinue(); i++) {
       try {
         const sock = await new Promise((resolve, reject) => {
           const s = createConnection(path);
@@ -405,13 +417,19 @@ export function createPlayerService({ prisma, io, emitQueueUpdated = async () =>
       return;
     }
 
-    mpvProcess = spawn(MPV_EXEC, [
-      "--really-quiet",
-      `--volume=${volume}`,
-      `--audio-device=${preferredAudioOutputDeviceId}`,
-      `--input-ipc-server=${socketSpec.ipcArg}`,
-      nextItem.song.path
-    ]);
+    mpvProcess = spawn(
+      MPV_EXEC,
+      [
+        "--really-quiet",
+        // Audio only: never open a window, even for cover art or video files.
+        "--no-video",
+        `--volume=${volume}`,
+        `--audio-device=${preferredAudioOutputDeviceId}`,
+        `--input-ipc-server=${socketSpec.ipcArg}`,
+        nextItem.song.path
+      ],
+      { env: playerEnv() }
+    );
     const launchedProcess = mpvProcess;
     processClosePromise = new Promise((resolve) => launchedProcess.once("close", resolve));
     const capturedSocketSpec = socketSpec;
@@ -428,8 +446,9 @@ export function createPlayerService({ prisma, io, emitQueueUpdated = async () =>
       console.warn(`[jukebox-player] failed to persist player state: ${error.message}`);
     });
 
-    // Connect IPC asynchronously — mpv needs a moment to create the socket/pipe
-    connectIpc(socketSpec.connectPath).then((sock) => {
+    // Connect IPC asynchronously — mpv needs a moment to create the socket/pipe. Keep trying for
+    // as long as this mpv is alive: without IPC, volume and pause cannot reach it.
+    connectIpc(socketSpec.connectPath, IPC_CONNECT_ATTEMPTS, () => mpvProcess === launchedProcess).then((sock) => {
       if (!sock) return;
       if (mpvProcess !== launchedProcess) {
         sock.destroy();
