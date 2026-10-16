@@ -3,6 +3,7 @@ import { getRequester } from "../lib/identity.js";
 import { runtime } from "../runtime.js";
 import {
   authorizeTransport,
+  getActiveQueueItem,
   clearQueue,
   downvoteQueueItem,
   enqueueSong,
@@ -78,31 +79,31 @@ export async function queueRoutes(fastify) {
   });
 
   fastify.post("/api/queue/:id/skip", async (request) => {
-    assertIsPlaying(await authorizeTransport(request.params?.id, getRequester(request)));
+    assertIsPlaying(await getActiveQueueItem(request.params?.id));
     await runtime.player.skip();
     return { ok: true };
   });
 
   fastify.post("/api/queue/:id/pause", async (request) => {
-    assertIsPlaying(await authorizeTransport(request.params?.id, getRequester(request)));
+    assertIsPlaying(await getActiveQueueItem(request.params?.id));
     await runtime.player.pause();
     return { ok: true };
   });
 
   fastify.post("/api/queue/:id/resume", async (request) => {
-    assertIsPlaying(await authorizeTransport(request.params?.id, getRequester(request)));
+    assertIsPlaying(await getActiveQueueItem(request.params?.id));
     await runtime.player.resume();
     return { ok: true };
   });
 
   fastify.post("/api/queue/:id/stop", async (request) => {
-    await authorizeTransport(request.params?.id, getRequester(request));
+    await getActiveQueueItem(request.params?.id);
     await runtime.player.stop();
     return { ok: true };
   });
 
   fastify.post("/api/queue/:id/start", async (request) => {
-    await authorizeTransport(request.params?.id, getRequester(request));
+    await getActiveQueueItem(request.params?.id);
     await runtime.player.start();
     return { ok: true };
   });

@@ -46,14 +46,12 @@ library, and a basic four-digit PIN for admin actions.
 - Watch now-playing and queue updates live.
 - Chat with the room and see who is connected, right on the home screen (see
   [Room Chat](#room-chat)).
+- Pause / resume, skip, and stop / start playback.
+- Set the volume and toggle queue loop.
 
 ### Requester or admin
 
-- Pause / resume
 - Seek
-- Skip
-- Toggle queue loop
-- Set volume
 - Clear their own queued entry
 
 ### Admin only (PIN-gated)
@@ -61,7 +59,6 @@ library, and a basic four-digit PIN for admin actions.
 - Delete songs, including the one currently playing.
 - Clear the entire queue.
 - Clear the room chat.
-- Start and stop queue playback.
 - Create, update, delete, and select moods.
 - Save the current playback history as a new mood, either whole or as a hand-picked selection.
 - Set the server's audio output device.
@@ -515,14 +512,14 @@ Errors are returned as `{ "error": "message" }` with a matching HTTP status.
 | `POST` | `/api/queue/:id/upvote` | Upvote (play next + save to the active mood) |
 | `POST` | `/api/queue/:id/play-next` | Admin or requester |
 | `POST` | `/api/queue/:id/remove-play-next` | Admin or requester |
-| `POST` | `/api/queue/:id/skip` | Admin or requester |
+| `POST` | `/api/queue/:id/skip` | Anyone |
 | `POST` | `/api/queue/:id/seek` | Admin or requester |
 | `POST` | `/api/queue/:id/loop` | Admin or requester |
 | `POST` | `/api/queue/:id/volume` | Admin or requester |
-| `POST` | `/api/queue/:id/pause` | Admin or requester |
-| `POST` | `/api/queue/:id/resume` | Admin or requester |
-| `POST` | `/api/queue/:id/start` | Admin or requester |
-| `POST` | `/api/queue/:id/stop` | Admin or requester |
+| `POST` | `/api/queue/:id/pause` | Anyone |
+| `POST` | `/api/queue/:id/resume` | Anyone |
+| `POST` | `/api/queue/:id/start` | Anyone |
+| `POST` | `/api/queue/:id/stop` | Anyone |
 | `POST` | `/api/queue/:id/clear` | Admin or requester |
 | `POST` | `/api/queue/:id/now-playing` | Play this track immediately |
 
@@ -531,11 +528,11 @@ Errors are returned as `{ "error": "message" }` with a matching HTTP status.
 | Method | Path | Notes |
 | --- | --- | --- |
 | `GET` | `/api/player` | Current player state |
-| `POST` | `/api/player/skip` | Requester of the current track or admin |
-| `POST` | `/api/player/pause` | Requester of the current track or admin |
-| `POST` | `/api/player/resume` | Requester of the current track or admin |
-| `POST` | `/api/player/stop` | Admin |
-| `POST` | `/api/player/start` | Admin |
+| `POST` | `/api/player/skip` | Anyone |
+| `POST` | `/api/player/pause` | Anyone |
+| `POST` | `/api/player/resume` | Anyone |
+| `POST` | `/api/player/stop` | Anyone; stops the queue until someone starts it again |
+| `POST` | `/api/player/start` | Anyone |
 | `POST` | `/api/player/seek` | `{ positionSeconds }` |
 | `POST` | `/api/player/volume` | `{ volume }` (0-100) |
 | `POST` | `/api/player/loop` | `{ enabled }` |

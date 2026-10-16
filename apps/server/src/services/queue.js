@@ -250,6 +250,13 @@ export async function getPlayingItem() {
 /**
  * Transport actions issued from a queue row only apply to the track that is actually playing.
  */
+/** An active queue item anyone may drive (skip, pause, resume, stop, start). */
+export async function getActiveQueueItem(queueItemId) {
+  const item = await loadItem(queueItemId);
+  assertActive(item);
+  return item;
+}
+
 export async function authorizeTransport(queueItemId, viewer) {
   const item = await loadItem(queueItemId);
   assertControl(item, viewer);

@@ -1,5 +1,5 @@
 import { httpError, requireObjectBody } from "../lib/http.js";
-import { getRequester, requireAdmin } from "../lib/identity.js";
+import { getRequester } from "../lib/identity.js";
 import { runtime } from "../runtime.js";
 import { getPlayingItem } from "../services/queue.js";
 
@@ -20,30 +20,28 @@ export async function playerRoutes(fastify) {
     return runtime.player.getState();
   });
 
-  fastify.post("/api/player/skip", async (request) => {
-    await assertCanControlPlayback(request);
+  // Skip, pause, resume, stop and start are open to everyone in the room.
+  fastify.post("/api/player/skip", async () => {
     await runtime.player.skip();
     return { ok: true };
   });
 
-  fastify.post("/api/player/pause", async (request) => {
-    await assertCanControlPlayback(request);
+  fastify.post("/api/player/pause", async () => {
     await runtime.player.pause();
     return { ok: true };
   });
 
-  fastify.post("/api/player/resume", async (request) => {
-    await assertCanControlPlayback(request);
+  fastify.post("/api/player/resume", async () => {
     await runtime.player.resume();
     return { ok: true };
   });
 
-  fastify.post("/api/player/stop", { preHandler: requireAdmin }, async () => {
+  fastify.post("/api/player/stop", async () => {
     await runtime.player.stop();
     return { ok: true };
   });
 
-  fastify.post("/api/player/start", { preHandler: requireAdmin }, async () => {
+  fastify.post("/api/player/start", async () => {
     await runtime.player.start();
     return { ok: true };
   });
