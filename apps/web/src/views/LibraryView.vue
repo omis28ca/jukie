@@ -1,15 +1,15 @@
 <script setup>
-import { onMounted, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import SongCard from '../components/SongCard.vue';
 import { useLibraryStore } from '../stores/library';
 import { useUiStore } from '../stores/ui';
 import { useYoutubeStore } from '../stores/youtube';
+import { formatTime } from '../lib/format';
 
 const library = useLibraryStore();
 const ui = useUiStore();
 const youtube = useYoutubeStore();
 
-const tab = ref('local');
 const searchTerm = ref(library.search);
 let debounceTimer = null;
 
@@ -18,12 +18,18 @@ const ytFolder = ref('');
 const ytMode = ref('audio');
 const ytPlaylist = ref(false);
 
+const trimmedTerm = computed(() => searchTerm.value.trim());
+const showYoutubePrompt = computed(
+  () =>
+    trimmedTerm.value.length >= 2 &&
+    trimmedTerm.value !== youtube.searchQuery &&
+    // Offer it while the availability check is still running; hide only once yt-dlp is known missing.
+    youtube.status?.available !== false
+);
+const showYoutubeResults = computed(() => youtube.searching || youtube.searched);
+
 onMounted(() => {
   if (!library.loaded) library.fetch();
-});
-
-watch(tab, (value) => {
-  if (value !== 'youtube') return;
   youtube.fetchStatus();
   youtube.fetchJobs();
 });
@@ -34,11 +40,35 @@ watch(searchTerm, (value) => {
   debounceTimer = setTimeout(() => library.fetch(), 300);
 });
 
+function searchYoutube() {
+  if (trimmedTerm.value.length < 2) {
+    ui.error('Type at least 2 characters to search YouTube');
+    return;
+  }
+  youtube.search(trimmedTerm.value);
+}
+
 function clearFilters() {
   searchTerm.value = '';
   library.search = '';
   library.genre = '';
   library.fetch();
+  youtube.clearSearch();
+}
+
+function resultAction(result) {
+  const job = youtube.songJobFor(result.videoId);
+  if (job) {
+    return {
+      label: job.status === 'queued' ? 'Waiting…' : `${Math.round(job.progressPercent || 0)}%`,
+      disabled: true,
+      job
+    };
+  }
+  if (youtube.adding[result.videoId]) return { label: 'Adding…', disabled: true };
+  if (result.isLive) return { label: 'Live', disabled: true };
+  if (result.tooLong) return { label: 'Too long', disabled: true };
+  return { label: 'Add', disabled: false };
 }
 
 async function startDownload() {
@@ -61,6 +91,7 @@ async function startDownload() {
 }
 
 function jobStatusLabel(job) {
+  if (job.status === 'queued') return 'Waiting';
   if (job.status === 'downloading') return `${Math.round(job.progressPercent || 0)}%`;
   if (job.status === 'completed') return 'Ready to import';
   if (job.status === 'cancelled') return 'Cancelled';
@@ -70,45 +101,79 @@ function jobStatusLabel(job) {
 
 <template>
   <div>
-    <div class="tabs" role="tablist" aria-label="Library source">
-      <button
-        class="tab"
-        role="tab"
-        type="button"
-        :aria-selected="tab === 'local'"
-        :class="{ active: tab === 'local' }"
-        @click="tab = 'local'"
-      >
-        Jukebox library
-      </button>
-      <button
-        class="tab"
-        role="tab"
-        type="button"
-        :aria-selected="tab === 'youtube'"
-        :class="{ active: tab === 'youtube' }"
-        @click="tab = 'youtube'"
-      >
-        YouTube download
-      </button>
-    </div>
+    <form class="search-bar panel" role="search" @submit.prevent="searchYoutube">
+      <div class="search-field">
+        <label class="visually-hidden" for="lib-search">Search the library or YouTube</label>
+        <input
+          id="lib-search"
+          v-model="searchTerm"
+          type="search"
+          enterkeyhint="search"
+          placeholder="Search songs, artists, or YouTube…"
+          autocomplete="off"
+        />
+      </div>
+      <button class="btn" type="button" @click="clearFilters">Clear</button>
+    </form>
 
-    <!-- Local library -->
-    <section v-show="tab === 'local'" class="section" role="tabpanel" aria-label="Jukebox library">
-      <div class="search-bar panel">
-        <div class="search-field">
-          <label class="visually-hidden" for="lib-search">Search the library</label>
-          <input
-            id="lib-search"
-            v-model="searchTerm"
-            type="search"
-            placeholder="Search by title, artist, album or genre…"
-            autocomplete="off"
-          />
-        </div>
-        <button class="btn" type="button" @click="clearFilters">Clear</button>
+    <button v-if="showYoutubePrompt" class="yt-prompt" type="button" @click="searchYoutube">
+      <span class="yt-logo" aria-hidden="true">▶</span>
+      <span class="min truncate">
+        Search YouTube for <strong>“{{ trimmedTerm }}”</strong>
+      </span>
+    </button>
+
+    <!-- YouTube results -->
+    <section v-if="showYoutubeResults" class="section" aria-label="YouTube results">
+      <div class="section-head">
+        <h2>From YouTube</h2>
+        <button class="btn btn-sm btn-ghost" type="button" @click="youtube.clearSearch()">Hide</button>
       </div>
 
+      <div v-if="youtube.searching" class="empty">Searching YouTube for “{{ youtube.searchQuery }}”…</div>
+      <div v-else-if="!youtube.results.length" class="empty">
+        No YouTube results for “{{ youtube.searchQuery }}”.
+      </div>
+      <ul v-else class="yt-results panel">
+        <li v-for="result in youtube.results" :key="result.videoId" class="yt-result">
+          <img class="yt-thumb" :src="result.thumbnailUrl" alt="" loading="lazy" />
+          <div class="yt-meta min">
+            <span class="yt-title yt-clamp" :title="result.title">{{ result.title }}</span>
+            <span class="muted small truncate">
+              {{ result.channel || 'YouTube' }}
+              <template v-if="result.duration"> • {{ formatTime(result.duration) }}</template>
+              <template v-if="result.songId"> • in library</template>
+            </span>
+            <div
+              v-if="resultAction(result).job?.status === 'downloading'"
+              class="yt-bar"
+              role="progressbar"
+              :aria-valuenow="Math.round(resultAction(result).job.progressPercent || 0)"
+              aria-valuemin="0"
+              aria-valuemax="100"
+            >
+              <span :style="{ width: `${Math.max(2, resultAction(result).job.progressPercent || 0)}%` }"></span>
+            </div>
+          </div>
+          <button
+            class="btn btn-sm"
+            :class="{ 'btn-primary': !resultAction(result).disabled }"
+            type="button"
+            :disabled="resultAction(result).disabled"
+            :aria-label="`Add ${result.title} to the queue`"
+            @click="youtube.addSong(result)"
+          >
+            {{ resultAction(result).label }}
+          </button>
+        </li>
+      </ul>
+      <p v-if="youtube.results.length" class="muted small yt-hint">
+        Songs not in the library are downloaded with yt-dlp, saved to the library, then queued.
+      </p>
+    </section>
+
+    <!-- Local library -->
+    <section class="section" aria-label="Jukebox library">
       <div v-if="library.genres.length" class="genre-chips" role="group" aria-label="Filter by genre">
         <button
           v-for="genre in library.genres"
@@ -125,14 +190,16 @@ function jobStatusLabel(job) {
 
       <div class="section-head">
         <h2>
-          {{ library.search || library.genre ? 'Results' : 'All songs' }}
+          {{ library.search || library.genre ? 'In the library' : 'All songs' }}
         </h2>
         <span class="sub">{{ library.songs.length }} songs</span>
       </div>
 
       <div v-if="library.loading && !library.songs.length" class="empty">Searching…</div>
       <div v-else-if="!library.songs.length" class="empty">
-        No songs matched. Try a different search, or
+        No songs in the library matched.
+        <template v-if="youtube.status?.available !== false"> Try searching YouTube above, or </template>
+        <template v-else> Try a different search, or </template>
         <RouterLink to="/upload">upload something</RouterLink>.
       </div>
       <div v-else class="card-grid">
@@ -140,13 +207,10 @@ function jobStatusLabel(job) {
       </div>
     </section>
 
-    <!-- yt-dlp download -->
-    <section
-      v-show="tab === 'youtube'"
-      class="section"
-      role="tabpanel"
-      aria-label="YouTube download"
-    >
+    <!-- yt-dlp link → mood -->
+    <details class="section panel yt-advanced">
+      <summary>Download a YouTube link or playlist as a mood</summary>
+
       <p class="notice">
         Downloads run through <strong>yt-dlp</strong> and land in the folder-import inbox, where Jukie
         turns them into a mood. Only download material you have the right to use — respect YouTube's
@@ -160,7 +224,7 @@ function jobStatusLabel(job) {
         Install it and set <code>YTDLP_EXEC</code> if it is not on the server's PATH.
       </div>
 
-      <form v-else class="panel stack yt-form" @submit.prevent="startDownload">
+      <form v-else class="stack yt-form" @submit.prevent="startDownload">
         <div>
           <label for="yt-url">YouTube link</label>
           <input
@@ -204,11 +268,7 @@ function jobStatusLabel(job) {
         </div>
 
         <div class="row">
-          <button
-            class="btn btn-primary"
-            type="submit"
-            :disabled="youtube.starting || Boolean(youtube.activeJob)"
-          >
+          <button class="btn btn-primary" type="submit" :disabled="youtube.starting">
             {{ youtube.starting ? 'Starting…' : 'Download' }}
           </button>
           <span v-if="youtube.status?.version" class="muted small">
@@ -217,8 +277,8 @@ function jobStatusLabel(job) {
         </div>
       </form>
 
-      <ul v-if="youtube.jobs.length" class="yt-jobs panel">
-        <li v-for="job in youtube.jobs" :key="job.id" class="yt-job">
+      <ul v-if="youtube.folderJobs.length" class="yt-jobs">
+        <li v-for="job in youtube.folderJobs" :key="job.id" class="yt-job">
           <div class="min">
             <span class="yt-title truncate">{{ job.title || job.url }}</span>
             <span class="muted small truncate">{{ job.message }}</span>
@@ -230,7 +290,7 @@ function jobStatusLabel(job) {
             {{ jobStatusLabel(job) }}
           </span>
           <button
-            v-if="job.status === 'downloading'"
+            v-if="job.status === 'downloading' || job.status === 'queued'"
             class="btn btn-sm btn-danger"
             type="button"
             @click="youtube.cancel(job.id)"
@@ -239,36 +299,107 @@ function jobStatusLabel(job) {
           </button>
         </li>
       </ul>
-    </section>
+    </details>
   </div>
 </template>
 
 <style scoped>
-.tabs {
-  display: flex;
-  gap: 0.35rem;
-  margin-bottom: 1.2rem;
-  border-bottom: 1px solid var(--border);
-}
-
-.tab {
-  padding: 0.55rem 0.9rem;
-  font-size: 0.88rem;
-  font-weight: 600;
-  color: var(--text-dim);
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-}
-
-.tab.active {
-  color: var(--text);
-  border-bottom-color: var(--accent);
-}
-
 .search-bar {
   display: flex;
   gap: 0.6rem;
   align-items: center;
+  margin-bottom: 1rem;
+}
+
+.yt-prompt {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  width: 100%;
+  margin: -0.4rem 0 1rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 0.9rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.yt-prompt:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.yt-prompt strong {
+  color: var(--text);
+}
+
+.yt-logo {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 30px;
+  height: 22px;
+  border-radius: 6px;
+  background: #e5332a;
+  color: #fff;
+  font-size: 0.7rem;
+}
+
+.yt-results {
+  padding: 0.4rem;
+}
+
+.yt-result {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem;
+  border-radius: var(--radius-sm);
+}
+
+.yt-result + .yt-result {
+  margin-top: 0.2rem;
+}
+
+.yt-result:hover {
+  background: var(--surface-2);
+}
+
+.yt-thumb {
+  flex: none;
+  width: 88px;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: 6px;
+  background: var(--surface-3);
+}
+
+.yt-meta {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.yt-hint {
+  margin: 0.5rem 0 0;
+}
+
+.yt-advanced {
+  padding: 0.9rem 1rem;
+}
+
+.yt-advanced summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+
+.yt-advanced[open] summary {
   margin-bottom: 1rem;
 }
 
@@ -295,6 +426,9 @@ function jobStatusLabel(job) {
 }
 
 .yt-jobs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
@@ -325,6 +459,19 @@ function jobStatusLabel(job) {
   height: 100%;
   background: var(--accent);
   transition: width 0.2s ease;
+}
+
+.min {
+  min-width: 0;
+  flex: 1;
+}
+
+.yt-clamp {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.3;
 }
 
 .search-field {

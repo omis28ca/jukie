@@ -1,15 +1,23 @@
 import { httpError, requireObjectBody } from "../lib/http.js";
 import { createRateLimiter } from "../lib/http.js";
 import { getRequester } from "../lib/identity.js";
+import { mapSong } from "../lib/serializers.js";
+import { enqueueSong } from "../services/queue.js";
 import {
+  addYoutubeSong,
+  assertVideoId,
   cancelYoutubeDownload,
+  findYoutubeSong,
   getYoutubeDownloaderStatus,
   listYoutubeJobs,
+  searchYoutube,
   startYoutubeDownload,
   validateYoutubeRequest
 } from "../services/ytdlp.js";
 
 const downloadLimiter = createRateLimiter({ limit: 5, windowMs: 60 * 60 * 1000 });
+const searchLimiter = createRateLimiter({ limit: 20, windowMs: 60 * 1000 });
+const songLimiter = createRateLimiter({ limit: 30, windowMs: 60 * 60 * 1000 });
 
 export async function externalRoutes(fastify) {
   /** Is yt-dlp usable on this server, and what are the current download limits? */
@@ -19,6 +27,42 @@ export async function externalRoutes(fastify) {
 
   fastify.get("/api/external/youtube/jobs", async () => {
     return { jobs: listYoutubeJobs() };
+  });
+
+  fastify.get("/api/external/youtube/search", async (request) => {
+    if (!searchLimiter(request.ip)) throw httpError(429, "Too many YouTube searches; try again shortly");
+    return { results: await searchYoutube(request.query?.q) };
+  });
+
+  /**
+   * Adds a YouTube video to the library and the queue. A video already in the library is queued
+   * straight away (201); otherwise it is downloaded first and queued when ready (202 with the job).
+   */
+  fastify.post("/api/external/youtube/songs", async (request, reply) => {
+    requireObjectBody(request.body);
+
+    const requester = getRequester(request);
+    const videoId = assertVideoId(request.body.videoId);
+    const playNext = request.body.playNext ?? false;
+
+    const existing = await findYoutubeSong(videoId);
+    if (existing) {
+      const item = await enqueueSong({ songId: existing.id, viewer: requester, playNext });
+      return reply.code(201).send({ song: mapSong(existing), item });
+    }
+
+    if (!requester.isAdmin && !songLimiter(request.ip)) {
+      throw httpError(429, "YouTube song limit reached; try again later");
+    }
+
+    const job = await addYoutubeSong({
+      videoId,
+      title: request.body.title,
+      channel: request.body.channel,
+      viewer: requester,
+      playNext
+    });
+    return reply.code(202).send({ job });
   });
 
   /**

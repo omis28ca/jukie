@@ -96,6 +96,7 @@ export const config = {
   ytdlpExec: resolveExec(process.env.YTDLP_EXEC, "../../yt-dlp/yt-dlp.exe", "yt-dlp"),
   ytdlpMaxFileMb: positiveNumber(process.env.YTDLP_MAX_FILE_MB, 500),
   ytdlpMaxPlaylistItems: positiveNumber(process.env.YTDLP_MAX_PLAYLIST_ITEMS, 50),
+  ytdlpMaxSongMinutes: positiveNumber(process.env.YTDLP_MAX_SONG_MINUTES, 20),
   ytdlpTimeoutMs: positiveNumber(process.env.YTDLP_TIMEOUT_MS, 30 * 60 * 1000),
   /**
    * YouTube regularly blocks whichever client yt-dlp picks first (HTTP 403 / "no formats"), so a

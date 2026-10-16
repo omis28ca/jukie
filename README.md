@@ -40,8 +40,9 @@ library, and a basic four-digit PIN for admin actions.
 - Select a mood playlist to play.
 - Upload audio or video (`.mp3`, `.mp4`, `.wav`, `.m4a`, `.flac`) via drag/drop, with a metadata
   preview after upload.
-- Download a YouTube link with yt-dlp straight into the folder-import inbox, with live progress and
-  cancel (see [YouTube downloads](#youtube-downloads-yt-dlp)).
+- Search YouTube from the library search bar and add a result straight to the library and the queue,
+  or download a YouTube link or playlist into the folder-import inbox as a mood (see
+  [YouTube downloads](#youtube-downloads-yt-dlp)).
 - Watch now-playing and queue updates live.
 - Chat with the room and see who is connected, right on the home screen (see
   [Room Chat](#room-chat)).
@@ -110,7 +111,7 @@ and the web app.
 | Route | Purpose |
 | --- | --- |
 | `/` | Now playing, queue, room chat, transport and admin controls |
-| `/library` | Searchable song list, enqueue, preview, YouTube download, delete (admin) |
+| `/library` | One search bar for the library and YouTube, enqueue, preview, YouTube download, delete (admin) |
 | `/upload` | Drag/drop uploader |
 | `/moods` | Browse moods and their songs, select a mood to play |
 | `/admin` | PIN entry, volume, moods, mood-from-history, audio output, storage management |
@@ -212,6 +213,7 @@ stored in the database and takes precedence over these variables on the next sta
 | `YTDLP_EXEC` | bundled `yt-dlp/yt-dlp.exe` on Windows, otherwise `yt-dlp` on `PATH` | Full path to the `yt-dlp` binary |
 | `YTDLP_MAX_FILE_MB` | `500` | Per-file cap passed as `--max-filesize` |
 | `YTDLP_MAX_PLAYLIST_ITEMS` | `50` | Maximum items fetched when playlist mode is enabled |
+| `YTDLP_MAX_SONG_MINUTES` | `20` | Longest video that YouTube search can add as a single song |
 | `YTDLP_TIMEOUT_MS` | `1800000` | Hard timeout before a download is killed |
 | `YTDLP_FALLBACK_CLIENTS` | `android,mweb,tv_simply` | Player clients retried once when YouTube rejects the default one; empty disables the retry |
 | `YTDLP_ARGS` | unset | Extra arguments appended to every `yt-dlp` call (for example `--cookies /path/cookies.txt`) |
@@ -310,7 +312,27 @@ are ignored until renamed. Alternatively, increase `IMPORT_SETTLE_MS`.
 
 ### YouTube downloads (yt-dlp)
 
-The second tab in `/library` accepts a YouTube link and hands it to
+#### Search and add a song
+
+The `/library` search bar filters the library as you type. Pressing Enter (or the **Search YouTube**
+prompt under the bar) searches YouTube through yt-dlp — no API key is needed — and lists the top 10
+videos. Pasting a YouTube link searches for exactly that video.
+
+- **Add** on a result already in the library queues it immediately.
+- Otherwise the server downloads the audio (YouTube's native M4A stream, so nothing is transcoded),
+  splits `Artist - Title` uploads into tags, strips suffixes like "(Official Video)", keeps the
+  thumbnail as cover art, stores the song with `sourceProvider: "youtube"`, and queues it for the
+  requester. A video someone else is already downloading is not fetched twice; each requester still
+  gets a queue entry.
+- Live streams and videos longer than `YTDLP_MAX_SONG_MINUTES` are refused.
+- Searches take a few seconds on small boards, so results are cached for 10 minutes, at most 2 run at
+  once, and each IP may search 20 times a minute. Non-admin callers may add 30 new songs per hour per
+  IP; songs already in the library are not counted.
+
+#### Download a link or playlist as a mood
+
+The **Download a YouTube link or playlist as a mood** panel at the bottom of `/library` accepts a
+YouTube link and hands it to
 [yt-dlp](https://github.com/yt-dlp/yt-dlp), which writes the result into the folder-import inbox so
 the normal [folder importer](#folder-imports-one-folder-per-mood) turns it into a mood.
 
@@ -323,16 +345,16 @@ the normal [folder importer](#folder-imports-one-folder-per-mood) turns it into 
   playlist position.
 - yt-dlp writes into a hidden staging folder, and the finished folder is renamed through an
   `.uploading` suffix, so the importer never sees a half-written download.
-- One download runs at a time. Progress, the resolved title, and failures stream to every client over
-  the `ytdlp:job` Socket.IO event, and a running job can be cancelled. The server keeps the last 20
-  jobs in memory.
+- One download runs at a time (song adds included); the rest wait in a FIFO queue of up to 20.
+  Progress, the resolved title, and failures stream to every client over the `ytdlp:job` Socket.IO
+  event, and a waiting or running job can be cancelled. The server keeps the last 20 jobs in memory.
 - Non-admin callers are limited to 5 downloads per hour per IP.
 - If YouTube refuses the default player client, the download is retried once using
   `YTDLP_FALLBACK_CLIENTS`.
 
 yt-dlp is not bundled: install it (`pipx install yt-dlp`, `pip install -U yt-dlp`, or a distro
-package) and keep it updated, or point `YTDLP_EXEC` at the binary. The tab shows the detected version
-and disables itself when yt-dlp is missing. Video/merged output also needs `ffmpeg`.
+package) and keep it updated, or point `YTDLP_EXEC` at the binary. The download panel shows the
+detected version, and YouTube search hides itself when yt-dlp is missing. Video/merged output also needs `ffmpeg`.
 
 > Downloading from YouTube may violate YouTube's Terms of Service and the rights of the copyright
 > holder. Only download material you own or that is licensed for reuse; you are responsible for what
@@ -541,6 +563,8 @@ Errors are returned as `{ "error": "message" }` with a matching HTTP status.
 | Method | Path | Notes |
 | --- | --- | --- |
 | `GET` | `/api/external/youtube` | yt-dlp availability, version and limits |
+| `GET` | `/api/external/youtube/search?q=` | Top 10 YouTube videos for `q` (or the video a pasted link points at), each with `songId` when already in the library |
+| `POST` | `/api/external/youtube/songs` | `{ videoId, title?, channel?, playNext? }` → `201 { song, item }` if already in the library, else `202` with the job; queued when ready |
 | `GET` | `/api/external/youtube/jobs` | Recent download jobs (newest first) |
 | `POST` | `/api/external/youtube/download` | `{ url, folderName?, mode: "audio"\|"video", playlist? }` → `202` with the job |
 | `DELETE` | `/api/external/youtube/jobs/:id` | Cancel a queued or running download |
