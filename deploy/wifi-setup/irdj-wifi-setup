@@ -1,0 +1,181 @@
+#!/bin/bash
+# IrDJ Wi-Fi setup fallback.
+#
+# When the box has no Wi-Fi or Ethernet connection (for example after moving it somewhere new), it
+# starts its own "IrDJ-Setup" hotspot so a phone can join it, open the admin page and pick the new
+# Wi-Fi network. The IrDJ server does the actual connecting; this daemon only decides when the
+# hotspot should be up.
+#
+#   irdj-wifi-setup run      main loop (used by irdj-wifi-setup.service)
+#   irdj-wifi-setup start    bring the setup hotspot up now
+#   irdj-wifi-setup stop     take it down (NetworkManager then rejoins saved networks)
+#   irdj-wifi-setup status   print the current state
+set -u
+
+CONF=/etc/irdj/wifi-setup.conf
+# shellcheck source=/dev/null
+[ -r "$CONF" ] && . "$CONF"
+
+IFACE=${IFACE:-wlan0}
+HOTSPOT_CON=${HOTSPOT_CON:-IrDJ-Setup}
+HOTSPOT_SSID=${HOTSPOT_SSID:-IrDJ-Setup}
+HOTSPOT_PASSWORD=${HOTSPOT_PASSWORD:-}
+SERVER_USER=${SERVER_USER:-user}
+APP_PORT=${APP_PORT:-3000}
+OFFLINE_GRACE=${OFFLINE_GRACE:-90}   # seconds without any connection before the hotspot starts
+IDLE_RETRY=${IDLE_RETRY:-300}        # hotspot with nobody on it this long: retry saved networks
+RETRY_WINDOW=${RETRY_WINDOW:-60}     # how long a retry waits for a saved network to come up
+RUN_DIR=/run/irdj-wifi
+CONNECTING_MARKER=$RUN_DIR/connecting   # touched by the server while it switches networks
+
+log() { echo "irdj-wifi-setup: $*"; }
+
+online() {
+  nmcli -t -f TYPE,STATE,CONNECTION device 2>/dev/null |
+    awk -F: -v hs="$HOTSPOT_CON" '($1 == "ethernet" || $1 == "wifi") && $2 == "connected" && $3 != hs { ok = 1 } END { exit !ok }'
+}
+
+hotspot_active() {
+  nmcli -t -f NAME connection show --active 2>/dev/null | grep -Fxq "$HOTSPOT_CON"
+}
+
+server_connecting() {
+  [ -f "$CONNECTING_MARKER" ] && [ $(( $(date +%s) - $(stat -c %Y "$CONNECTING_MARKER") )) -lt 120 ]
+}
+
+hotspot_clients() {
+  iw dev "$IFACE" station dump 2>/dev/null | grep -c '^Station'
+}
+
+server_group() {
+  id -gn "$SERVER_USER"
+}
+
+prepare_run_dir() {
+  install -d -m 0775 -o root -g "$(server_group)" "$RUN_DIR"
+}
+
+ensure_profile() {
+  if [ ${#HOTSPOT_PASSWORD} -lt 8 ]; then
+    log "HOTSPOT_PASSWORD in $CONF must be at least 8 characters"
+    exit 1
+  fi
+  if ! nmcli -t -f NAME connection show | grep -Fxq "$HOTSPOT_CON"; then
+    nmcli connection add type wifi ifname "$IFACE" con-name "$HOTSPOT_CON" autoconnect no \
+      ssid "$HOTSPOT_SSID" 802-11-wireless.mode ap 802-11-wireless.band bg \
+      ipv4.method shared ipv6.method disabled \
+      wifi-sec.key-mgmt wpa-psk wifi-sec.psk "$HOTSPOT_PASSWORD" >/dev/null
+    log "created hotspot profile $HOTSPOT_CON"
+  else
+    nmcli connection modify "$HOTSPOT_CON" ssid "$HOTSPOT_SSID" wifi-sec.psk "$HOTSPOT_PASSWORD" \
+      connection.autoconnect no >/dev/null
+  fi
+}
+
+# The radio cannot scan while it is an access point, so remember what was nearby beforehand.
+save_scan() {
+  nmcli device wifi rescan ifname "$IFACE" >/dev/null 2>&1
+  sleep 6
+  nmcli -t -f SSID,SIGNAL,SECURITY device wifi list ifname "$IFACE" --rescan no >"$RUN_DIR/scan.tmp" 2>/dev/null &&
+    mv "$RUN_DIR/scan.tmp" "$RUN_DIR/scan.txt"
+  chmod 0644 "$RUN_DIR/scan.txt" 2>/dev/null
+}
+
+write_state() {
+  local address
+  address=$(nmcli -g IP4.ADDRESS device show "$IFACE" 2>/dev/null | head -n1 | cut -d/ -f1)
+  address=${address:-10.42.0.1}
+  (
+    umask 027
+    printf '{"ssid":"%s","password":"%s","address":"%s","url":"http://%s:%s/admin"}\n' \
+      "$HOTSPOT_SSID" "$HOTSPOT_PASSWORD" "$address" "$address" "$APP_PORT" >"$RUN_DIR/hotspot.json.tmp"
+  )
+  chgrp "$(server_group)" "$RUN_DIR/hotspot.json.tmp"
+  mv "$RUN_DIR/hotspot.json.tmp" "$RUN_DIR/hotspot.json"
+}
+
+start_hotspot() {
+  prepare_run_dir
+  ensure_profile
+  save_scan
+  if nmcli --wait 30 connection up "$HOTSPOT_CON" >/dev/null 2>&1; then
+    write_state
+    log "setup hotspot \"$HOTSPOT_SSID\" is up"
+  else
+    log "could not start the setup hotspot"
+    return 1
+  fi
+}
+
+stop_hotspot() {
+  nmcli connection down "$HOTSPOT_CON" >/dev/null 2>&1
+  rm -f "$RUN_DIR/hotspot.json"
+}
+
+wait_online() {
+  local deadline=$(( $(date +%s) + $1 ))
+  while [ "$(date +%s)" -lt "$deadline" ]; do
+    online && return 0
+    sleep 5
+  done
+  return 1
+}
+
+run() {
+  prepare_run_dir
+  ensure_profile
+  local offline_since="" idle_since="" now
+
+  while true; do
+    now=$(date +%s)
+    if hotspot_active; then
+      offline_since=""
+      [ -f "$RUN_DIR/hotspot.json" ] || write_state
+      if server_connecting || [ "$(hotspot_clients)" -gt 0 ]; then
+        idle_since=""
+      else
+        idle_since=${idle_since:-$now}
+        if [ $(( now - idle_since )) -ge "$IDLE_RETRY" ]; then
+          log "nobody on the hotspot; retrying saved networks"
+          stop_hotspot
+          if wait_online "$RETRY_WINDOW"; then
+            log "back online"
+          else
+            start_hotspot
+          fi
+          idle_since=""
+        fi
+      fi
+    else
+      idle_since=""
+      rm -f "$RUN_DIR/hotspot.json"
+      if online || server_connecting; then
+        offline_since=""
+      else
+        offline_since=${offline_since:-$now}
+        if [ $(( now - offline_since )) -ge "$OFFLINE_GRACE" ]; then
+          log "offline for ${OFFLINE_GRACE}s; starting the setup hotspot"
+          start_hotspot
+          offline_since=""
+        fi
+      fi
+    fi
+    sleep 10
+  done
+}
+
+case "${1:-run}" in
+  run) run ;;
+  start) start_hotspot ;;
+  stop) stop_hotspot ;;
+  status)
+    if hotspot_active; then
+      echo "setup hotspot \"$HOTSPOT_SSID\" is up ($(hotspot_clients) connected)"
+    elif online; then
+      echo "online"
+    else
+      echo "offline"
+    fi
+    ;;
+  *) echo "usage: $0 [run|start|stop|status]" >&2; exit 2 ;;
+esac

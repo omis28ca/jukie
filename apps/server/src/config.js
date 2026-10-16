@@ -96,6 +96,7 @@ export const config = {
   ytdlpExec: resolveExec(process.env.YTDLP_EXEC, "../../yt-dlp/yt-dlp.exe", "yt-dlp"),
   ytdlpMaxFileMb: positiveNumber(process.env.YTDLP_MAX_FILE_MB, 500),
   ytdlpMaxPlaylistItems: positiveNumber(process.env.YTDLP_MAX_PLAYLIST_ITEMS, 50),
+  wifiHotspotConnection: String(process.env.WIFI_HOTSPOT_CONNECTION || "IrDJ-Setup").trim(),
   ytdlpMaxSongMinutes: positiveNumber(process.env.YTDLP_MAX_SONG_MINUTES, 20),
   ytdlpTimeoutMs: positiveNumber(process.env.YTDLP_TIMEOUT_MS, 30 * 60 * 1000),
   /**
@@ -119,5 +120,6 @@ export const config = {
 export const SETTING_KEYS = {
   audioOutputDeviceId: "player.audioOutputDeviceId",
   activeMoodId: "player.activeMoodId",
+  volume: "player.volume",
   storageRoot: "storage.root"
 };

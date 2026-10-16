@@ -113,7 +113,14 @@ function makeSocketSpec(pid, ts) {
   return { ipcArg: sockPath, connectPath: sockPath, isNamedPipe: false };
 }
 
-export function createPlayerService({ prisma, io, emitQueueUpdated = async () => {}, deferStartup = false }) {
+export function createPlayerService({
+  prisma,
+  io,
+  emitQueueUpdated = async () => {},
+  deferStartup = false,
+  initialVolume = 80,
+  persistVolume = async () => {}
+}) {
   console.info(`[jukebox-player] mpv executable: ${MPV_EXEC}`);
 
   let mpvProcess = null;
@@ -121,7 +128,8 @@ export function createPlayerService({ prisma, io, emitQueueUpdated = async () =>
   let socketSpec = null;
   let currentQueueItem = null;
   let state = "idle";
-  let volume = 80;
+  let volume = Number.isFinite(initialVolume) ? Math.max(0, Math.min(100, Math.round(initialVolume))) : 80;
+  let persistVolumeTimer = null;
   let isStopping = false;
   let isAdvancing = false;
   let advancementPromise = Promise.resolve();
@@ -592,6 +600,14 @@ export function createPlayerService({ prisma, io, emitQueueUpdated = async () =>
       try { await sendCommand(["set_property", "volume", volume]); } catch {}
     }
     emitState();
+
+    // Dragging the slider sends a burst of updates; only the value it settles on is saved.
+    clearTimeout(persistVolumeTimer);
+    persistVolumeTimer = setTimeout(() => {
+      persistVolume(volume).catch((error) => {
+        console.warn(`[jukebox-player] failed to save volume: ${error.message}`);
+      });
+    }, 500);
   }
 
   async function seek(positionSeconds) {

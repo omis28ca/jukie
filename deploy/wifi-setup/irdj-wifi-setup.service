@@ -1,0 +1,12 @@
+[Unit]
+Description=IrDJ Wi-Fi setup hotspot fallback
+After=NetworkManager.service
+Wants=NetworkManager.service
+
+[Service]
+ExecStart=/usr/local/bin/irdj-wifi-setup run
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

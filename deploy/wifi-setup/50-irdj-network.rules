@@ -1,0 +1,7 @@
+// Lets the account that runs the IrDJ server manage Wi-Fi through NetworkManager (scan, join and
+// forget networks, toggle the setup hotspot) without a password prompt.
+polkit.addRule(function (action, subject) {
+  if (action.id.indexOf("org.freedesktop.NetworkManager.") === 0 && subject.user === "@SERVER_USER@") {
+    return polkit.Result.YES;
+  }
+});

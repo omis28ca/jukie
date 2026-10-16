@@ -67,6 +67,8 @@ library, and a basic four-digit PIN for admin actions.
 - Set the server's audio output device.
 - Manage storage: delete uploaded files and artwork, and prune orphaned files.
 - Choose the drive or folder that holds the music, with optional migration of the existing library.
+- Join, switch and forget Wi-Fi networks; after a move the box offers an **IrDJ-Setup** hotspot
+  for this (see [Moving to a new location (Wi-Fi setup)](#moving-to-a-new-location-wi-fi-setup)).
 
 ---
 
@@ -92,10 +94,12 @@ apps/
     prisma/          Prisma schema and SQLite database
     src/
       routes/        HTTP route plugins (songs, queue, player, moods, admin, external, chat, info)
-      services/      player (mpv IPC), queue, moods, library, imports, yt-dlp, chat, MQTT
+      services/      player (mpv IPC), queue, moods, library, imports, yt-dlp, Wi-Fi, chat, MQTT
       media/         ffprobe/ffmpeg metadata and artwork extraction
       lib/           identity, serializers, HTTP helpers
   web/               Vue 3 + Vite single-page app served to guests
+deploy/
+  wifi-setup/        Setup-hotspot daemon, systemd unit, polkit rule and installer
 docs/                Project documentation and the GUI reference
 storage/
   uploads/           Uploaded and imported media files
@@ -391,6 +395,7 @@ The home screen carries a small live chat so the room can talk without shouting 
 - Admins can reshuffle the upcoming queue from Home with **Shuffle queue** (keeps `playNext` tracks
   pinned at the front).
 - Loop mode: tracks that finish naturally return to the tail of the queue instead of falling off.
+- Volume: anyone can change it. The last level is saved and restored when the server restarts.
 - Downvoting removes a track immediately (and skips it when it is playing), removes it from the
   active mood, and each person may vote once per queue item.
 - Upvoting promotes a track to play next and appends it to the active mood when it is missing.
@@ -460,7 +465,8 @@ Prisma models backed by SQLite.
 
 ### `AppSetting` / `FolderImport`
 
-- `AppSetting`: key/value store for the selected audio output device and active mood
+- `AppSetting`: key/value store for the selected audio output device, active mood, room volume and
+  music storage root
 - `FolderImport`: in-flight folder import bookkeeping used for crash recovery
 
 ---
@@ -480,7 +486,7 @@ Errors are returned as `{ "error": "message" }` with a matching HTTP status.
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| `GET` | `/api/info` | Server name, version, and `joinUrl` for the QR code |
+| `GET` | `/api/info` | Server name, version, `joinUrl` for the QR code, and `wifiSetup` while the setup hotspot is up (the password only for the kiosk on the box itself) |
 | `GET` | `/api/health` | Liveness probe |
 | `GET` | `/api/config` | Upload limits, allowed extensions, enabled integrations |
 
@@ -557,6 +563,10 @@ Errors are returned as `{ "error": "message" }` with a matching HTTP status.
 | `POST` | `/api/admin/storage/prune` | Delete files no song references any more |
 | `GET` | `/api/admin/storage/location` | Current music folder, free/total space, and the detected drives |
 | `POST` | `/api/admin/storage/location` | `{ root, move? }` or `{ useDefault: true, move? }` to repoint the library |
+| `GET` | `/api/admin/wifi` | Current Wi-Fi (network, signal, IP), Ethernet, setup hotspot, last join attempt, saved networks |
+| `GET` | `/api/admin/wifi/networks?rescan=1` | Nearby networks, strongest first (`cached: true` while the hotspot is up) |
+| `POST` | `/api/admin/wifi/connect` | `{ ssid, password?, hidden? }`; `202` when sent from the setup hotspot, which drops as the radio switches |
+| `DELETE` | `/api/admin/wifi/saved/:uuid` | Forget a saved network |
 
 ### YouTube downloads
 
@@ -597,6 +607,7 @@ Socket.IO is used for live updates. Clients pass their name (and PIN, when known
 - `chat:presence` — `{ presence }` whenever somebody connects or disconnects
 - `chat:cleared` — an admin wiped the chat board
 - `ytdlp:job` — a YouTube download job snapshot (progress, status, resulting mood name)
+- `wifi:status` — `{ lastAttempt }` while joining a Wi-Fi network and when it finishes
 - `player:error` — `{ message }`
 
 **Client → server**
@@ -648,6 +659,44 @@ Notes for a headless box:
   a plain systemd unit running `node src/index.js` from `apps/server` works just as well.
 - Pull updates with `git pull`, then re-run `npm install`, `npm run prisma:push` (server) and
   `npm run build` (web) before restarting.
+
+### Moving to a new location (Wi-Fi setup)
+
+**Admin → Wi-Fi** shows the current network and lets an admin scan, join a network (with its
+password, or a hidden one by name), switch between saved networks and forget old ones. It drives
+NetworkManager through `nmcli`, so the account that runs the server needs permission to manage
+networking. That, and the setup hotspot below, come from `deploy/wifi-setup`:
+
+```bash
+sudo deploy/wifi-setup/install.sh            # server user defaults to the sudo caller
+```
+
+The installer adds:
+
+- `/etc/polkit-1/rules.d/50-irdj-network.rules` — lets the server user manage NetworkManager
+  without a password prompt.
+- `irdj-wifi-setup.service` running `/usr/local/bin/irdj-wifi-setup` — if the box has no Wi-Fi or
+  Ethernet connection for 90 seconds (`OFFLINE_GRACE`), it starts its own **IrDJ-Setup** Wi-Fi
+  hotspot. With nobody on the hotspot for 5 minutes (`IDLE_RETRY`), it drops the hotspot for a
+  minute to retry the saved networks, then brings it back.
+- `/etc/irdj/wifi-setup.conf` — hotspot name, password (generated at install and printed once),
+  interface, and the timings above. Restart `irdj-wifi-setup` after editing it.
+
+After a move:
+
+1. Power the box on. After about 90 seconds the kiosk screen shows a **Wi-Fi setup** card with a QR
+   code and the hotspot password.
+2. Scan the QR code with a phone (or join **IrDJ-Setup** by hand), then open the address on the
+   card — `http://10.42.0.1:3000/admin`.
+3. Enter the admin PIN and pick the location's network under **Wi-Fi**. The radio cannot scan
+   while it is a hotspot, so the list is the one saved just before the hotspot started; use
+   **Join a hidden network** for anything missing.
+4. The phone loses the hotspot as the box switches over. The kiosk confirms the new connection (or
+   the hotspot returns with the error so you can try again). Join the same network on the phone to
+   keep using IrDJ; the Cloudflare tunnel reconnects on its own once there is internet.
+
+Plugging in Ethernet also works: the hotspot never starts while any wired or Wi-Fi connection is
+up. `sudo irdj-wifi-setup start|stop|status` controls the hotspot by hand.
 
 ### Remote access with Cloudflare Tunnel
 

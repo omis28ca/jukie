@@ -9,6 +9,7 @@ import { useLibraryStore } from '../stores/library';
 import { useMoodsStore } from '../stores/moods';
 import { useUiStore } from '../stores/ui';
 import { formatTime } from '../lib/format';
+import WifiPanel from '../components/WifiPanel.vue';
 
 const session = useSessionStore();
 const player = usePlayerStore();
@@ -435,6 +436,8 @@ async function deleteSong(song) {
           </p>
         </div>
       </section>
+
+      <WifiPanel />
 
       <!-- Moods -->
       <section class="section">

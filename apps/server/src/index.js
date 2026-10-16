@@ -12,7 +12,7 @@ import { createRealtime } from "./realtime.js";
 import { createPlayerService } from "./services/player.js";
 import { createImportWatcher, recoverFolderImports } from "./services/imports.js";
 import { createMqttBridge } from "./services/mqtt.js";
-import { getAudioOutputSetting } from "./services/settings.js";
+import { getAudioOutputSetting, getVolumeSetting, setVolumeSetting } from "./services/settings.js";
 import { loadStorageRoot } from "./services/storage.js";
 import { songRoutes } from "./routes/songs.js";
 import { queueRoutes } from "./routes/queue.js";
@@ -42,7 +42,9 @@ const player = createPlayerService({
   prisma,
   io: realtime.io,
   emitQueueUpdated: realtime.broadcastQueue,
-  deferStartup: true
+  deferStartup: true,
+  initialVolume: (await getVolumeSetting()) ?? 80,
+  persistVolume: setVolumeSetting
 });
 const mqttBridge = createMqttBridge(fastify.log);
 

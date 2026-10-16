@@ -37,6 +37,16 @@ export async function setAudioOutputSetting(deviceId) {
   return normalized;
 }
 
+export async function getVolumeSetting() {
+  const raw = await getSetting(SETTING_KEYS.volume);
+  const volume = raw === null || raw.trim() === "" ? NaN : Number(raw);
+  return Number.isFinite(volume) ? Math.max(0, Math.min(100, Math.round(volume))) : null;
+}
+
+export async function setVolumeSetting(volume) {
+  return setSetting(SETTING_KEYS.volume, String(volume));
+}
+
 export async function getActiveMoodId() {
   return getSetting(SETTING_KEYS.activeMoodId);
 }

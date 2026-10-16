@@ -8,6 +8,7 @@ import { runtime } from "../runtime.js";
 import { listAudioOutputDevices } from "../services/audio-devices.js";
 import { getAudioOutputSetting, setAudioOutputSetting } from "../services/settings.js";
 import { describeStorage, setStorageRoot } from "../services/storage.js";
+import { connectWifi, forgetWifi, getWifiStatus, listSavedWifi, scanWifi } from "../services/wifi.js";
 
 async function directoryReport(directory) {
   const entries = await readdir(directory, { withFileTypes: true }).catch(() => []);
@@ -145,5 +146,29 @@ export async function adminRoutes(fastify) {
     }
 
     return { ok: true, removedCount };
+  });
+
+  fastify.get("/api/admin/wifi", { preHandler: requireAdmin }, async () => {
+    const [status, saved] = await Promise.all([getWifiStatus(), listSavedWifi()]);
+    return { ...status, saved };
+  });
+
+  fastify.get("/api/admin/wifi/networks", { preHandler: requireAdmin }, async (request) => {
+    return scanWifi({ rescan: request.query?.rescan === "1" || request.query?.rescan === "true" });
+  });
+
+  /** Joins a network; `202` when answered from the setup hotspot, which drops as the radio switches. */
+  fastify.post("/api/admin/wifi/connect", { preHandler: requireAdmin }, async (request, reply) => {
+    requireObjectBody(request.body);
+    const result = await connectWifi({
+      ssid: request.body.ssid,
+      password: request.body.password,
+      hidden: request.body.hidden ?? false
+    });
+    return reply.code(result.pending ? 202 : 200).send(result);
+  });
+
+  fastify.delete("/api/admin/wifi/saved/:uuid", { preHandler: requireAdmin }, async (request) => {
+    return forgetWifi(String(request.params?.uuid || ""));
   });
 }

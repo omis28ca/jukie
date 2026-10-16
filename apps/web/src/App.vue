@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import BottomTabs from './components/BottomTabs.vue';
+import WifiSetupBanner from './components/WifiSetupBanner.vue';
 import PlayerBar from './components/PlayerBar.vue';
 import ToastHost from './components/ToastHost.vue';
 import JoinGate from './components/JoinGate.vue';
@@ -121,6 +122,7 @@ function onGateDone() {
       </header>
 
       <main class="content">
+        <WifiSetupBanner />
         <RouterView />
       </main>
     </div>
