@@ -10,12 +10,7 @@ export const useLibraryStore = defineStore('library', {
     search: '',
     genre: '',
     loading: false,
-    loaded: false,
-    externalQuery: '',
-    externalResults: [],
-    externalLoading: false,
-    externalSearched: false,
-    importingId: ''
+    loaded: false
   }),
   getters: {
     genres: (state) => {
@@ -85,44 +80,6 @@ export const useLibraryStore = defineStore('library', {
       } catch (error) {
         ui.error(error);
         throw error;
-      }
-    },
-    async externalSearch(query) {
-      const ui = useUiStore();
-      const q = String(query ?? this.externalQuery).trim();
-      this.externalQuery = q;
-      if (!q) {
-        this.externalResults = [];
-        this.externalSearched = false;
-        return;
-      }
-      this.externalLoading = true;
-      try {
-        const payload = await api.get(`/api/external/search?q=${encodeURIComponent(q)}`);
-        this.externalResults = Array.isArray(payload?.results) ? payload.results : [];
-        this.externalSearched = true;
-      } catch (error) {
-        ui.error(error);
-      } finally {
-        this.externalLoading = false;
-      }
-    },
-    async importExternal(result) {
-      const ui = useUiStore();
-      this.importingId = `${result.provider}:${result.id}`;
-      try {
-        const payload = await api.post('/api/external/import', {
-          provider: result.provider,
-          id: result.id
-        });
-        if (payload?.song) this.upsertSong(payload.song);
-        ui.success(`Imported “${payload?.song?.title || result.title}”`);
-        return payload?.song ?? null;
-      } catch (error) {
-        ui.error(error);
-        throw error;
-      } finally {
-        this.importingId = '';
       }
     }
   }

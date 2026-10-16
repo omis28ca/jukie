@@ -4,7 +4,6 @@ import SongCard from '../components/SongCard.vue';
 import { useLibraryStore } from '../stores/library';
 import { useUiStore } from '../stores/ui';
 import { useYoutubeStore } from '../stores/youtube';
-import { formatBytes } from '../lib/format';
 
 const library = useLibraryStore();
 const ui = useUiStore();
@@ -12,7 +11,6 @@ const youtube = useYoutubeStore();
 
 const tab = ref('local');
 const searchTerm = ref(library.search);
-const externalTerm = ref(library.externalQuery);
 let debounceTimer = null;
 
 const ytUrl = ref('');
@@ -41,31 +39,6 @@ function clearFilters() {
   library.search = '';
   library.genre = '';
   library.fetch();
-}
-
-function runExternal() {
-  library.externalSearch(externalTerm.value);
-}
-
-async function importResult(result) {
-  try {
-    const song = await library.importExternal(result);
-    if (song) {
-      tab.value = 'local';
-      await library.fetch();
-    }
-  } catch {
-    /* toast already raised */
-  }
-}
-
-function openLink(result) {
-  const url = result.watchUrl || result.sourceUrl;
-  if (!url) {
-    ui.error('This result has no link to open');
-    return;
-  }
-  window.open(url, '_blank', 'noopener,noreferrer');
 }
 
 async function startDownload() {
@@ -107,16 +80,6 @@ function jobStatusLabel(job) {
         @click="tab = 'local'"
       >
         Jukebox library
-      </button>
-      <button
-        class="tab"
-        role="tab"
-        type="button"
-        :aria-selected="tab === 'external'"
-        :class="{ active: tab === 'external' }"
-        @click="tab = 'external'"
-      >
-        External search
       </button>
       <button
         class="tab"
@@ -175,83 +138,6 @@ function jobStatusLabel(job) {
       <div v-else class="card-grid">
         <SongCard v-for="song in library.songs" :key="song.id" :song="song" />
       </div>
-    </section>
-
-    <!-- External search -->
-    <section
-      v-show="tab === 'external'"
-      class="section"
-      role="tabpanel"
-      aria-label="External search"
-    >
-      <form class="search-bar panel" @submit.prevent="runExternal">
-        <div class="search-field">
-          <label class="visually-hidden" for="ext-search">Search public-domain audio and YouTube</label>
-          <input
-            id="ext-search"
-            v-model="externalTerm"
-            type="search"
-            placeholder="Search Internet Archive (importable) and YouTube (links only)…"
-            autocomplete="off"
-          />
-        </div>
-        <button class="btn btn-primary" type="submit" :disabled="library.externalLoading">
-          {{ library.externalLoading ? 'Searching…' : 'Search' }}
-        </button>
-      </form>
-
-      <p class="notice">
-        Public-domain / CC0 results can be imported into the jukebox. <strong>YouTube results are
-        links only</strong> — use the “YouTube download” tab to fetch one deliberately.
-      </p>
-
-      <div v-if="library.externalLoading" class="empty">Searching external sources…</div>
-      <div v-else-if="library.externalSearched && !library.externalResults.length" class="empty">
-        No external results for “{{ library.externalQuery }}”.
-      </div>
-      <ul v-else-if="library.externalResults.length" class="ext-list panel">
-        <li v-for="result in library.externalResults" :key="`${result.provider}:${result.id}`" class="ext-item">
-          <div class="ext-meta">
-            <span class="ext-title truncate">{{ result.title }}</span>
-            <span class="ext-sub truncate muted">
-              {{ result.artist || 'Unknown artist' }} • {{ result.provider }}
-              <template v-if="result.sizeBytes"> • {{ formatBytes(result.sizeBytes) }}</template>
-            </span>
-            <span class="ext-links">
-              <a v-if="result.sourceUrl" :href="result.sourceUrl" target="_blank" rel="noopener noreferrer">
-                Source
-              </a>
-              <a v-if="result.licenseUrl" :href="result.licenseUrl" target="_blank" rel="noopener noreferrer">
-                License
-              </a>
-            </span>
-          </div>
-
-          <div class="ext-actions">
-            <span v-if="!result.importable" class="badge">Link only</span>
-            <button
-              v-if="result.importable"
-              class="btn btn-sm btn-primary"
-              type="button"
-              :disabled="library.importingId === `${result.provider}:${result.id}`"
-              :aria-label="`Import ${result.title} into the jukebox library`"
-              @click="importResult(result)"
-            >
-              {{ library.importingId === `${result.provider}:${result.id}` ? 'Importing…' : 'Import' }}
-            </button>
-            <button
-              v-else
-              class="btn btn-sm"
-              type="button"
-              :aria-label="`Open ${result.title} on ${result.provider} in a new tab`"
-              @click="openLink(result)"
-            >
-              Open link ↗
-            </button>
-          </div>
-        </li>
-      </ul>
-      <div v-else class="empty">Search for public-domain music to add to the jukebox.</div>
     </section>
 
     <!-- yt-dlp download -->
@@ -462,62 +348,5 @@ function jobStatusLabel(job) {
   border-radius: var(--radius-sm);
   padding: 0.6rem 0.8rem;
   margin-bottom: 1rem;
-}
-
-.ext-list {
-  padding: 0.5rem;
-}
-
-.ext-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 0.6rem 0.7rem;
-  border-radius: var(--radius-sm);
-}
-
-.ext-item:hover {
-  background: var(--surface-2);
-}
-
-.ext-item + .ext-item {
-  margin-top: 0.25rem;
-}
-
-.ext-meta {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.ext-title {
-  font-size: 0.9rem;
-  font-weight: 600;
-}
-
-.ext-sub {
-  font-size: 0.76rem;
-}
-
-.ext-links {
-  display: flex;
-  gap: 0.6rem;
-  font-size: 0.74rem;
-  margin-top: 0.15rem;
-}
-
-.ext-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  flex: none;
-}
-
-@media (max-width: 640px) {
-  .ext-item {
-    flex-direction: column;
-    align-items: flex-start;
-  }
 }
 </style>
