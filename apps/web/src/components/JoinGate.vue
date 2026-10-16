@@ -52,7 +52,7 @@ function submit() {
       <div class="gate-main">
         <div class="brand">
           <span class="brand-mark" aria-hidden="true">♪</span>
-          <span class="brand-name">Jukie</span>
+          <span class="brand-name">IrDJ</span>
         </div>
         <h1 id="gate-title">
           {{ mode === 'change' ? 'Change your name' : 'Join the jukebox' }}
@@ -98,8 +98,8 @@ function submit() {
 
       <aside class="gate-qr">
         <h2>Invite the room</h2>
-        <p class="muted small">Scan to open Jukie on another phone.</p>
-        <img v-if="qrDataUrl" :src="qrDataUrl" alt="QR code to join Jukie" class="qr" />
+        <p class="muted small">Scan to open IrDJ on another phone.</p>
+        <img v-if="qrDataUrl" :src="qrDataUrl" alt="QR code to join IrDJ" class="qr" />
         <div v-else class="qr qr-empty" aria-hidden="true">QR</div>
         <code class="join-url">{{ joinUrl }}</code>
       </aside>

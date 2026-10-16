@@ -115,7 +115,7 @@ export async function listVolumes() {
     const usage = await diskUsage(path);
     volumes.push({
       path,
-      suggestedRoot: join(path, "jukie-music"),
+      suggestedRoot: join(path, "irdj-music"),
       ...usage,
       writable: await access(path, constants.W_OK).then(() => true).catch(() => false)
     });

@@ -32,7 +32,7 @@ const changingName = ref(false);
 const booted = ref(false);
 
 const showGate = computed(() => !session.hasJoined || changingName.value);
-const pageTitle = computed(() => route.meta?.title || 'Jukie');
+const pageTitle = computed(() => route.meta?.title || 'IrDJ');
 
 async function boot() {
   if (booted.value) return;

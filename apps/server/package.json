@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Jukie jukebox server: Fastify + Prisma + Socket.IO + mpv",
+  "description": "IrDJ jukebox server: Fastify + Prisma + Socket.IO + mpv",
   "scripts": {
     "dev": "node --watch src/index.js",
     "start": "node src/index.js",

@@ -1,12 +1,12 @@
-# Jukie Web
+# IrDJ Web
 
-The guest-facing frontend for the Jukie local-network jukebox. Vue 3 + Vite + Pinia + Vue Router,
+The guest-facing frontend for the IrDJ local-network jukebox. Vue 3 + Vite + Pinia + Vue Router,
 Socket.IO for live state, and an optional MQTT bridge for home automation.
 
 ## Requirements
 
 - Node.js LTS (ESM)
-- The Jukie backend listening on `http://localhost:3000` (see the repository root README)
+- The IrDJ backend listening on `http://localhost:3000` (see the repository root README)
 
 ## Getting started
 
@@ -89,5 +89,5 @@ src/
 npm run build
 ```
 
-The output in `dist/` is a static bundle — serve it from the Jukie backend (or any static host) on
+The output in `dist/` is a static bundle — serve it from the IrDJ backend (or any static host) on
 the same origin as `/api` and `/socket.io`.

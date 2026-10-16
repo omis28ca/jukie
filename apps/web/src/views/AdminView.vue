@@ -646,10 +646,10 @@ async function deleteSong(song) {
               v-model="storageRootInput"
               type="text"
               spellcheck="false"
-              placeholder="/mnt/music or D:\jukie-music"
+              placeholder="/mnt/music or D:\irdj-music"
             />
             <p class="muted small">
-              Jukie creates <code>uploads</code>, <code>artwork</code> and <code>imports</code> inside this
+              IrDJ creates <code>uploads</code>, <code>artwork</code> and <code>imports</code> inside this
               folder.
             </p>
           </div>

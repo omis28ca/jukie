@@ -1,6 +1,6 @@
-# Jukie
+# IrDJ
 
-Jukie is a local-network jukebox for a home automation system. Guests scan a QR code, open the web
+IrDJ is a local-network jukebox for a home automation system. Guests scan a QR code, open the web
 app in a browser, enter a name or alias, and start requesting music. An Ubuntu host plays the audio
 through `mpv`, and everyone sees live queue and player state in real time.
 
@@ -261,12 +261,12 @@ Supported actions: `play`/`start`, `resume`, `pause`, `stop`, `skip`/`next`, `vo
 
 ### Choosing the music storage drive
 
-Everything Jukie stores — uploaded media, extracted artwork and the folder-import inbox — lives under
+Everything IrDJ stores — uploaded media, extracted artwork and the folder-import inbox — lives under
 one root directory. It defaults to `storage/` at the repository root (or `STORAGE_ROOT`), and an
 admin can move it to a different disk at any time from **Admin → Music storage drive**.
 
 The panel lists the drives the server can see with their free space, pre-fills a suggested folder
-such as `/mnt/music/jukie-music` or `D:\jukie-music`, and accepts any absolute path. Jukie creates
+such as `/mnt/music/irdj-music` or `D:\irdj-music`, and accepts any absolute path. IrDJ creates
 `uploads/`, `artwork/` and `imports/` inside the folder you choose.
 
 - **Move the existing library** (checked by default) relocates the stored media, artwork and pending
@@ -276,7 +276,7 @@ such as `/mnt/music/jukie-music` or `D:\jukie-music`, and accepts any absolute p
   holds the current file open.
 - The new folder must be writable and cannot sit inside the current storage folder.
 - The choice is saved in the database, so it survives restarts and outranks `STORAGE_ROOT`. If the
-  drive is missing at boot (an unplugged USB disk), Jukie logs a warning and falls back to the
+  drive is missing at boot (an unplugged USB disk), IrDJ logs a warning and falls back to the
   configured default instead of refusing to start.
 - **Reset to default** clears the override and returns to the `STORAGE_ROOT` layout.
 
@@ -651,7 +651,7 @@ Notes for a headless box:
 
 ### Remote access with Cloudflare Tunnel
 
-To reach Jukie from a public domain when the box sits on a dynamic IP or behind a firewall/CGNAT,
+To reach IrDJ from a public domain when the box sits on a dynamic IP or behind a firewall/CGNAT,
 run a Cloudflare Tunnel. `cloudflared` dials out to Cloudflare, so no inbound ports or DNS updates
 are needed. The domain's DNS must be hosted on Cloudflare.
 

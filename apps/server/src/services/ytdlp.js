@@ -590,7 +590,7 @@ function runYtdlpJson(args) {
       try {
         resolve(JSON.parse(stdout));
       } catch {
-        reject(httpError(502, "yt-dlp returned results Jukie could not read"));
+        reject(httpError(502, "yt-dlp returned results IrDJ could not read"));
       }
     });
   });

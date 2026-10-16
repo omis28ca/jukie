@@ -37,7 +37,7 @@ const router = createRouter({
 });
 
 router.afterEach((to) => {
-  document.title = to.meta?.title ? `Jukie · ${to.meta.title}` : 'Jukie';
+  document.title = to.meta?.title ? `IrDJ · ${to.meta.title}` : 'IrDJ';
 });
 
 export default router;

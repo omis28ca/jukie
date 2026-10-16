@@ -73,7 +73,7 @@ export async function request(path, options = {}) {
     });
   } catch (error) {
     if (error?.name === 'AbortError') throw error;
-    throw new ApiError('Network error — is the Jukie server running?', 0, null);
+    throw new ApiError('Network error — is the IrDJ server running?', 0, null);
   }
 
   if (raw) {

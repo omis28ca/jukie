@@ -117,7 +117,7 @@ try {
   await fastify.listen({ port: config.port, host: config.host });
   fastify.log.info(
     { playerExec: config.playerExec, audioProbeExec: config.audioProbeExec, audioTranscodeExec: config.audioTranscodeExec },
-    "Jukie server started"
+    "IrDJ server started"
   );
 
   if (!isShuttingDown) await player.cleanupOrphanedPlayback();

@@ -212,7 +212,7 @@ function jobStatusLabel(job) {
       <summary>Download a YouTube link or playlist as a mood</summary>
 
       <p class="notice">
-        Downloads run through <strong>yt-dlp</strong> and land in the folder-import inbox, where Jukie
+        Downloads run through <strong>yt-dlp</strong> and land in the folder-import inbox, where IrDJ
         turns them into a mood. Only download material you have the right to use — respect YouTube's
         terms and the rights of the people who made it.
       </p>

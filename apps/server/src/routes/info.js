@@ -28,7 +28,7 @@ function resolveJoinUrl(request) {
 export async function infoRoutes(fastify) {
   fastify.get("/api/info", async (request) => {
     return {
-      name: "Jukie",
+      name: "IrDJ",
       version: "1.0.0",
       joinUrl: resolveJoinUrl(request)
     };
