@@ -182,7 +182,7 @@ Copy `apps/server/.env.example` to `apps/server/.env` and adjust the values belo
 | `DATABASE_URL` | `file:./dev.db` | Prisma SQLite connection string |
 | `ADMIN_PIN` | `1234` | Four-digit PIN for admin actions |
 | `PUBLIC_URL` | auto-detected | Absolute URL encoded into the join QR code |
-| `TRUST_PROXY` | unset | Set to `loopback` when nginx on the same host proxies requests, so client-IP rate limits stay accurate |
+| `TRUST_PROXY` | unset | Set to `loopback` when nginx or `cloudflared` on the same host proxies requests, so client-IP rate limits stay accurate |
 | `WEB_DIST_DIR` | `../web/dist` | Built web app served by the server when present |
 
 ### Storage and uploads
@@ -651,6 +651,47 @@ Notes for a headless box:
   a plain systemd unit running `node src/index.js` from `apps/server` works just as well.
 - Pull updates with `git pull`, then re-run `npm install`, `npm run prisma:push` (server) and
   `npm run build` (web) before restarting.
+
+### Remote access with Cloudflare Tunnel
+
+To reach Jukie from a public domain when the box sits on a dynamic IP or behind a firewall/CGNAT,
+run a Cloudflare Tunnel. `cloudflared` dials out to Cloudflare, so no inbound ports or DNS updates
+are needed. The domain's DNS must be hosted on Cloudflare.
+
+```bash
+# install (Debian/Ubuntu, any architecture)
+sudo mkdir -p --mode=0755 /usr/share/keyrings
+curl -fsSL https://pkg.cloudflare.com/cloudflare-public-v2.gpg \
+  | sudo tee /usr/share/keyrings/cloudflare-public-v2.gpg >/dev/null
+echo 'deb [signed-by=/usr/share/keyrings/cloudflare-public-v2.gpg] https://pkg.cloudflare.com/cloudflared any main' \
+  | sudo tee /etc/apt/sources.list.d/cloudflared.list
+sudo apt update && sudo apt install -y cloudflared
+
+cloudflared tunnel login                      # opens a URL; pick the domain
+cloudflared tunnel create jukie               # writes ~/.cloudflared/<tunnel-id>.json
+cloudflared tunnel route dns jukie jukie.example.com
+```
+
+Copy the credentials file to `/etc/cloudflared/` and create `/etc/cloudflared/config.yml`:
+
+```yaml
+tunnel: <tunnel-id>
+credentials-file: /etc/cloudflared/<tunnel-id>.json
+ingress:
+  - hostname: jukie.example.com
+    service: http://localhost:3000
+  - service: http_status:404
+```
+
+```bash
+sudo cloudflared tunnel --config /etc/cloudflared/config.yml ingress validate
+sudo cloudflared service install              # systemd unit, starts on boot
+```
+
+Then set `PUBLIC_URL=https://jukie.example.com` and `TRUST_PROXY=loopback` in `apps/server/.env`
+and restart the server, so the join QR code uses the public URL and rate limits see real client
+IPs. The admin area is then internet-facing behind only `ADMIN_PIN`; consider Cloudflare Access in
+front of it. Check the tunnel with `systemctl status cloudflared` / `journalctl -u cloudflared -f`.
 
 ---
 
