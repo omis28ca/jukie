@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import BottomTabs from './components/BottomTabs.vue';
 import WifiSetupBanner from './components/WifiSetupBanner.vue';
@@ -83,10 +83,6 @@ watch(
   }
 );
 
-onMounted(() => {
-  session.loadInfo();
-});
-
 onBeforeUnmount(() => {
   player.stopTicker();
   mqtt.disconnect();
@@ -104,31 +100,33 @@ function onGateDone() {
 
 <template>
   <div class="app-shell">
-    <div class="app-main">
-      <header class="topbar">
-        <h1 class="topbar-title">{{ pageTitle }}</h1>
-        <span v-if="!ui.connected" class="chip offline" title="Live updates unavailable">
-          Offline
-        </span>
-        <button
-          class="avatar"
-          type="button"
-          :title="`${session.name || 'Guest'} · Change name`"
-          aria-label="Change name"
-          @click="changingName = true"
-        >
-          {{ initials(session.name) }}
-        </button>
-      </header>
+    <div v-if="session.hasJoined" :inert="showGate" :aria-hidden="showGate || undefined">
+      <div class="app-main">
+        <header class="topbar">
+          <h1 class="topbar-title">{{ pageTitle }}</h1>
+          <span v-if="!ui.connected" class="chip offline" title="Live updates unavailable">
+            Offline
+          </span>
+          <button
+            class="avatar"
+            type="button"
+            :title="`${session.name || 'Guest'} · Change name`"
+            aria-label="Change name"
+            @click="changingName = true"
+          >
+            {{ initials(session.name) }}
+          </button>
+        </header>
 
-      <main class="content">
-        <WifiSetupBanner />
-        <RouterView />
-      </main>
+        <main class="content">
+          <WifiSetupBanner />
+          <RouterView />
+        </main>
+      </div>
+
+      <PlayerBar />
+      <BottomTabs />
     </div>
-
-    <PlayerBar />
-    <BottomTabs />
     <ToastHost />
 
     <JoinGate
@@ -146,8 +144,20 @@ function onGateDone() {
 }
 
 .app-main {
-  padding-bottom: calc(var(--player-h) + var(--tabbar-h) + 16px);
   min-height: 100vh;
+  margin-left: var(--rail-w);
+  padding-bottom: calc(var(--player-h) + 40px);
+}
+
+.app-main > * {
+  min-width: 0;
+}
+
+.app-main .content {
+  width: 100%;
+  max-width: 1500px;
+  margin: 0 auto;
+  padding: 2rem clamp(1.25rem, 3.5vw, 3.5rem) 2rem;
 }
 
 .topbar {
@@ -155,61 +165,71 @@ function onGateDone() {
   top: 0;
   z-index: 60;
   display: flex;
+  min-height: 76px;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.85rem 1.5rem;
-  background: rgba(13, 13, 13, 0.9);
-  backdrop-filter: blur(8px);
-  border-bottom: 1px solid var(--border);
+  gap: 0.9rem;
+  padding: 0.8rem clamp(1.25rem, 3.5vw, 3.5rem);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.055);
+  background: rgba(16, 17, 15, 0.84);
+  backdrop-filter: blur(18px);
 }
 
 .topbar-title {
   flex: 1;
-  font-size: 1.15rem;
+  font-size: 1rem;
   font-weight: 650;
+  letter-spacing: -0.01em;
 }
 
 .offline {
+  border-color: rgba(239, 201, 106, 0.3);
   color: var(--warn);
-  border-color: #4a3d1c;
 }
 
 .avatar {
   display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
+  width: 38px;
+  height: 38px;
   flex: none;
-  border: 1px solid var(--border);
+  place-items: center;
+  border: 1px solid rgba(201, 243, 106, 0.35);
   border-radius: 50%;
-  background: var(--surface-3);
-  color: var(--text-dim);
+  background: rgba(201, 243, 106, 0.12);
+  color: var(--accent);
   font: inherit;
-  font-size: 0.75rem;
-  font-weight: 650;
+  font-size: 0.78rem;
+  font-weight: 750;
   cursor: pointer;
 }
 
 .avatar:hover {
-  color: var(--text);
+  background: rgba(201, 243, 106, 0.2);
 }
 
 .content {
   padding: 1.5rem;
-  max-width: 1400px;
 }
 
 @media (max-width: 900px) {
   .app-main {
-    padding-bottom: calc(180px + var(--tabbar-h));
+    margin-left: 0;
+    padding-bottom: calc(164px + var(--tabbar-h) + env(safe-area-inset-bottom, 0px));
   }
 
   .topbar {
-    padding: 0.7rem 1rem;
+    min-height: 64px;
+    padding: 0.65rem 1rem;
   }
 
-  .content {
-    padding: 1rem;
+  .app-main .content {
+    padding: 1.25rem 1rem;
   }
 }
+
+@media (max-width: 520px) {
+  .app-main {
+    padding-bottom: calc(156px + var(--tabbar-h) + env(safe-area-inset-bottom, 0px));
+  }
+}
+
 </style>

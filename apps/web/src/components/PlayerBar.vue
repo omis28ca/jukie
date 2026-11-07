@@ -170,9 +170,9 @@ const volumeIcon = computed(() => {
 <style scoped>
 .player-bar {
   position: fixed;
-  left: 0;
+  left: var(--rail-w);
   right: 0;
-  bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px));
+  bottom: 0;
   height: var(--player-h);
   z-index: 95;
   display: grid;
@@ -180,8 +180,9 @@ const volumeIcon = computed(() => {
   align-items: center;
   gap: 1rem;
   padding: 0.6rem 1rem;
-  background: var(--bg-elevated);
-  border-top: 1px solid var(--border);
+  border-top: 1px solid rgba(255, 255, 255, 0.075);
+  background: rgba(23, 24, 21, 0.97);
+  backdrop-filter: blur(20px);
 }
 
 .pb-track {
@@ -230,15 +231,15 @@ const volumeIcon = computed(() => {
 .pb-play {
   width: 42px;
   height: 42px;
-  background: var(--text);
-  color: #111;
-  border-color: var(--text);
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: var(--accent);
   font-size: 0.85rem;
 }
 
 .pb-play:hover:not(:disabled) {
-  background: #fff;
-  border-color: #fff;
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
 }
 
 .pb-loop.on {
@@ -337,6 +338,8 @@ const volumeIcon = computed(() => {
 
 @media (max-width: 900px) {
   .player-bar {
+    left: 0;
+    bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px));
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-rows: auto auto;
     height: auto;

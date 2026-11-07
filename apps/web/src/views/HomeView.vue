@@ -247,19 +247,25 @@ async function shuffleQueue() {
 <style scoped>
 .hero {
   display: grid;
-  grid-template-columns: 260px minmax(0, 1fr);
-  gap: 1.5rem;
-  background: linear-gradient(120deg, #17211f 0%, var(--surface) 55%);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 1.5rem;
+  grid-template-columns: minmax(220px, 0.78fr) minmax(0, 1.22fr);
+  gap: clamp(1.25rem, 3vw, 3rem);
+  overflow: hidden;
+  padding: clamp(1.25rem, 3vw, 2.5rem);
+  border: 1px solid rgba(201, 243, 106, 0.15);
+  border-radius: 24px;
+  background:
+    radial-gradient(ellipse at 2% 5%, rgba(201, 243, 106, 0.17), transparent 25rem),
+    linear-gradient(125deg, #22251b 0%, #1b1d19 68%);
+  box-shadow: var(--shadow);
 }
 
 .hero-art {
-  width: 260px;
-  height: 260px;
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
+  width: 100%;
+  max-width: 360px;
+  height: auto;
+  aspect-ratio: 1;
+  border-radius: 18px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.4);
 }
 
 .hero-body {
@@ -277,8 +283,10 @@ async function shuffleQueue() {
 }
 
 .hero-title {
-  font-size: 2rem;
-  line-height: 1.15;
+  max-width: 780px;
+  font-size: clamp(2rem, 4vw, 3.5rem);
+  line-height: 1.02;
+  letter-spacing: -0.055em;
   word-break: break-word;
 }
 
@@ -292,12 +300,12 @@ async function shuffleQueue() {
 }
 
 .hero-progress {
-  margin: 1.1rem 0 0.9rem;
+  margin: 1.6rem 0 1.1rem;
   position: relative;
 }
 
 .hero-bar {
-  height: 4px;
+  height: 5px;
   border-radius: 4px;
   background: var(--surface-3);
   overflow: hidden;
@@ -307,6 +315,7 @@ async function shuffleQueue() {
   height: 100%;
   background: var(--accent);
   transition: width 0.4s linear;
+  border-radius: inherit;
 }
 
 .hero-range {
@@ -333,7 +342,7 @@ async function shuffleQueue() {
 
 .hero-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.55rem;
   flex-wrap: wrap;
 }
 
@@ -349,22 +358,35 @@ async function shuffleQueue() {
 
 @media (max-width: 860px) {
   .hero {
-    grid-template-columns: 1fr;
-    padding: 1rem;
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+    gap: 1rem;
+    padding: 1.25rem;
   }
 
   .hero-art {
-    width: 100%;
-    height: auto;
-    max-width: 320px;
+    max-width: none;
   }
 
   .hero-title {
-    font-size: 1.5rem;
+    font-size: clamp(1.5rem, 4vw, 2.3rem);
   }
 
   .hero-range {
     opacity: 1;
+  }
+}
+
+@media (max-width: 560px) {
+  .hero {
+    grid-template-columns: 1fr;
+  }
+
+  .hero-art {
+    width: min(100%, 300px);
+  }
+
+  .hero-title {
+    font-size: 2rem;
   }
 
   .hero-bar {

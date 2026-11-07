@@ -53,9 +53,15 @@ When `VITE_MQTT_URL` is set the app:
 
 ## Identity and admin
 
-- The first load shows a full-screen join gate; the chosen name is stored in `localStorage` under
+- The first load shows a responsive welcome page with a name form and a scan-to-join QR code.
+  Phones use a single-column layout, tablets and larger displays use two columns, and TVs get
+  larger typography and QR codes. The QR encodes the backend's `/api/info` join URL (set
+  `PUBLIC_URL` on the server to override it), with a white background and four-module quiet zone.
+  Guests should connect to the jukebox's Wi-Fi network before scanning. The welcome page does not
+  automatically open a mobile keyboard or expose playback controls before joining.
+  The chosen name is stored in `localStorage` under
   `jukie.name` and sent on every request as the `x-jukebox-user` header (URL-encoded if non-ASCII).
-  "Change name" lives in the sidebar footer.
+  "Change name" is available through the header avatar; Escape or Cancel dismisses that dialog.
 - The admin PIN is validated through `POST /api/admin/auth`, stored as `jukie.pin`, and sent as the
   `x-admin-pin` header. Admin-only UI stays disabled until the server accepts the PIN.
 
