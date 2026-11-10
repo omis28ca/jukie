@@ -113,6 +113,8 @@ The UI stays on `/`. Library, Upload, Moods, and Admin open in a side drawer fro
 (full-width on phones), without navigating away from playback or search. Switch sections inside
 the drawer, or close it with Close, Escape, or a click on the backdrop. Forms retain their state
 while switching sections or closing and reopening the drawer. Admin actions still require the PIN.
+A join QR code and room link stay visible at the top of the homepage while scrolling, so other
+guests can join from their phones on the same Wi-Fi.
 
 | Homepage area | Purpose |
 | --- | --- |

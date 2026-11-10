@@ -6,6 +6,7 @@ import WifiSetupBanner from './components/WifiSetupBanner.vue';
 import PlayerBar from './components/PlayerBar.vue';
 import ToastHost from './components/ToastHost.vue';
 import JoinGate from './components/JoinGate.vue';
+import JoinInvite from './components/JoinInvite.vue';
 import { useSessionStore } from './stores/session';
 import { useUiStore } from './stores/ui';
 import { usePlayerStore } from './stores/player';
@@ -104,6 +105,7 @@ function onGateDone() {
       <div class="app-main">
 
         <main class="content">
+          <JoinInvite />
           <WifiSetupBanner />
           <RouterView />
         </main>
