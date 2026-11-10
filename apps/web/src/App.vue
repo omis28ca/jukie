@@ -102,32 +102,16 @@ function onGateDone() {
   <div class="app-shell">
     <div v-if="session.hasJoined" :inert="showGate" :aria-hidden="showGate || undefined">
       <div class="app-main">
-        <header class="topbar">
-          <h1 class="topbar-title">{{ pageTitle }}</h1>
-          <span v-if="!ui.connected" class="chip offline" title="Live updates unavailable">
-            Offline
-          </span>
-          <button
-            class="avatar"
-            type="button"
-            :title="`${session.name || 'Guest'} · Change name`"
-            aria-label="Change name"
-            @click="changingName = true"
-          >
-            {{ initials(session.name) }}
-          </button>
-        </header>
 
         <main class="content">
           <WifiSetupBanner />
           <RouterView />
         </main>
+
       </div>
 
-      <PlayerBar />
-      <BottomTabs />
     </div>
-    <ToastHost />
+    <ToastHost v-if="!ui.homePanel" />
 
     <JoinGate
       v-if="showGate"
@@ -145,8 +129,6 @@ function onGateDone() {
 
 .app-main {
   min-height: 100vh;
-  margin-left: var(--rail-w);
-  padding-bottom: calc(var(--player-h) + 40px);
 }
 
 .app-main > * {
@@ -155,8 +137,7 @@ function onGateDone() {
 
 .app-main .content {
   width: 100%;
-  max-width: 1500px;
-  margin: 0 auto;
+  max-width: none;
   padding: 2rem clamp(1.25rem, 3.5vw, 3.5rem) 2rem;
 }
 
@@ -209,27 +190,4 @@ function onGateDone() {
 .content {
   padding: 1.5rem;
 }
-
-@media (max-width: 900px) {
-  .app-main {
-    margin-left: 0;
-    padding-bottom: calc(164px + var(--tabbar-h) + env(safe-area-inset-bottom, 0px));
-  }
-
-  .topbar {
-    min-height: 64px;
-    padding: 0.65rem 1rem;
-  }
-
-  .app-main .content {
-    padding: 1.25rem 1rem;
-  }
-}
-
-@media (max-width: 520px) {
-  .app-main {
-    padding-bottom: calc(156px + var(--tabbar-h) + env(safe-area-inset-bottom, 0px));
-  }
-}
-
 </style>

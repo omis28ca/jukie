@@ -3,8 +3,10 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import QRCode from 'qrcode';
 import { getSocket } from '../lib/socket';
 import { useSessionStore } from '../stores/session';
+import { useUiStore } from '../stores/ui';
 
 const session = useSessionStore();
+const ui = useUiStore();
 
 const setup = computed(() => session.info?.wifiSetup ?? null);
 const qrDataUrl = ref('');
@@ -63,7 +65,7 @@ onBeforeUnmount(() => {
       </ol>
       <p v-else class="ws-text">
         You're on the <strong>{{ setup.ssid }}</strong> hotspot.
-        <RouterLink to="/admin">Open Admin → Wi-Fi</RouterLink> to pick this location's network.
+        <button class="btn btn-sm" type="button" @click="ui.homePanel = 'admin'">Open Admin → Wi-Fi</button> to pick this location's network.
       </p>
 
       <p v-if="lastAttempt?.status === 'connecting'" class="ws-status">Joining “{{ lastAttempt.ssid }}”…</p>

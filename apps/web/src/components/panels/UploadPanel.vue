@@ -1,13 +1,14 @@
 <script setup>
 import { computed, ref } from 'vue';
-import ArtThumb from '../components/ArtThumb.vue';
-import { uploadFile } from '../lib/api';
-import { useLibraryStore } from '../stores/library';
-import { useQueueStore } from '../stores/queue';
-import { useSessionStore } from '../stores/session';
-import { useUiStore } from '../stores/ui';
-import { formatBytes, formatTime } from '../lib/format';
+import ArtThumb from '../ArtThumb.vue';
+import { uploadFile } from '../../lib/api';
+import { useLibraryStore } from '../../stores/library';
+import { useQueueStore } from '../../stores/queue';
+import { useSessionStore } from '../../stores/session';
+import { useUiStore } from '../../stores/ui';
+import { formatBytes, formatTime } from '../../lib/format';
 
+const emit = defineEmits(['open-panel']);
 const ACCEPT = '.mp3,.mp4,.wav,.m4a,.flac';
 const ALLOWED = ['.mp3', '.mp4', '.wav', '.m4a', '.flac'];
 
@@ -199,7 +200,7 @@ async function queueUploaded() {
         </dl>
         <div class="result-actions">
           <button class="btn btn-primary" type="button" @click="queueUploaded">Add to queue</button>
-          <RouterLink class="btn" to="/library">Open library</RouterLink>
+          <button class="btn" type="button" @click="emit('open-panel', 'library')">Open library</button>
         </div>
       </div>
     </section>

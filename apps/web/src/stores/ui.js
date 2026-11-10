@@ -5,6 +5,7 @@ let toastId = 0;
 export const useUiStore = defineStore('ui', {
   state: () => ({
     toasts: [],
+    homePanel: '',
     connected: false
   }),
   actions: {

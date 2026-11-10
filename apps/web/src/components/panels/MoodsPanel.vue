@@ -1,10 +1,11 @@
 <script setup>
 import { onMounted, ref } from 'vue';
-import MoodCard from '../components/MoodCard.vue';
-import SongCard from '../components/SongCard.vue';
-import { useMoodsStore } from '../stores/moods';
-import { useSessionStore } from '../stores/session';
+import MoodCard from '../MoodCard.vue';
+import SongCard from '../SongCard.vue';
+import { useMoodsStore } from '../../stores/moods';
+import { useSessionStore } from '../../stores/session';
 
+const emit = defineEmits(['open-panel']);
 const moods = useMoodsStore();
 const session = useSessionStore();
 
@@ -40,9 +41,9 @@ async function open(mood) {
       <div v-else-if="!moods.moods.length" class="empty">
         No moods yet.
         <template v-if="session.isAdmin">
-          Create one on the <RouterLink to="/admin">admin</RouterLink> page.
+          Create one in <button class="btn btn-sm" type="button" @click="emit('open-panel', 'admin')">Admin</button>.
         </template>
-        <template v-else>An admin can create them from the admin page.</template>
+        <template v-else>An admin can create them from the Admin drawer.</template>
       </div>
       <div v-else class="card-grid">
         <div v-for="mood in moods.moods" :key="mood.id" class="mood-wrap">

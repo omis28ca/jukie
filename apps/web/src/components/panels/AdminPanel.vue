@@ -1,15 +1,15 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue';
-import ArtThumb from '../components/ArtThumb.vue';
-import { api } from '../lib/api';
-import { useSessionStore } from '../stores/session';
-import { usePlayerStore } from '../stores/player';
-import { useQueueStore } from '../stores/queue';
-import { useLibraryStore } from '../stores/library';
-import { useMoodsStore } from '../stores/moods';
-import { useUiStore } from '../stores/ui';
-import { formatTime } from '../lib/format';
-import WifiPanel from '../components/WifiPanel.vue';
+import ArtThumb from '../ArtThumb.vue';
+import { api } from '../../lib/api';
+import { useSessionStore } from '../../stores/session';
+import { usePlayerStore } from '../../stores/player';
+import { useQueueStore } from '../../stores/queue';
+import { useLibraryStore } from '../../stores/library';
+import { useMoodsStore } from '../../stores/moods';
+import { useUiStore } from '../../stores/ui';
+import { formatTime } from '../../lib/format';
+import WifiPanel from '../WifiPanel.vue';
 
 const session = useSessionStore();
 const player = usePlayerStore();
@@ -437,7 +437,7 @@ async function deleteSong(song) {
         </div>
       </section>
 
-      <WifiPanel />
+      <WifiPanel v-if="isAdmin" />
 
       <!-- Moods -->
       <section class="section">

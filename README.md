@@ -40,7 +40,7 @@ library, and a basic four-digit PIN for admin actions.
 - Select a mood playlist to play.
 - Upload audio or video (`.mp3`, `.mp4`, `.wav`, `.m4a`, `.flac`) via drag/drop, with a metadata
   preview after upload.
-- Search YouTube from the library search bar and add a result straight to the library and the queue,
+- Search YouTube from the homepage search bar and add a result straight to the library and the queue,
   or download a YouTube link or playlist into the folder-import inbox as a mood (see
   [YouTube downloads](#youtube-downloads-yt-dlp)).
 - Watch now-playing and queue updates live.
@@ -107,15 +107,20 @@ storage/
 In production the server also serves `apps/web/dist`, so one process answers the API, the WebSocket,
 and the web app.
 
-### Web routes
+### Homepage tools
 
-| Route | Purpose |
+The UI stays on `/`. Library, Upload, Moods, and Admin open in a side drawer from the homepage
+(full-width on phones), without navigating away from playback or search. Switch sections inside
+the drawer, or close it with Close, Escape, or a click on the backdrop. Forms retain their state
+while switching sections or closing and reopening the drawer. Admin actions still require the PIN.
+
+| Homepage area | Purpose |
 | --- | --- |
-| `/` | Now playing, queue, room chat, transport and admin controls |
-| `/library` | One search bar for the library and YouTube, enqueue, preview, YouTube download, delete (admin) |
-| `/upload` | Drag/drop uploader |
-| `/moods` | Browse moods and their songs, select a mood to play |
-| `/admin` | PIN entry, volume, moods, mood-from-history, audio output, storage management |
+| Main content | Now playing, queue, and search across Queue, Library, and YouTube |
+| Library drawer | Browse, filter, enqueue, preview, YouTube download, delete (admin) |
+| Upload drawer | Drag/drop uploader |
+| Moods drawer | Browse moods and their songs, select a mood to play |
+| Admin drawer | PIN entry, volume, moods, mood-from-history, audio output, storage management |
 
 ---
 

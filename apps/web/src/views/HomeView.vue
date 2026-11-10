@@ -1,15 +1,16 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import ArtThumb from '../components/ArtThumb.vue';
 import QueueItemRow from '../components/QueueItemRow.vue';
-import MoodCard from '../components/MoodCard.vue';
-import ChatPanel from '../components/ChatPanel.vue';
+import HomeTools from '../components/HomeTools.vue';
 import SongCard from '../components/SongCard.vue';
 import { usePlayerStore } from '../stores/player';
 import { useQueueStore } from '../stores/queue';
 import { useLibraryStore } from '../stores/library';
 import { useMoodsStore } from '../stores/moods';
 import { useSessionStore } from '../stores/session';
+import { useYoutubeStore } from '../stores/youtube';
+import { useUiStore } from '../stores/ui';
 import { formatTime } from '../lib/format';
 
 const player = usePlayerStore();
@@ -17,10 +18,13 @@ const queue = useQueueStore();
 const library = useLibraryStore();
 const moods = useMoodsStore();
 const session = useSessionStore();
+const youtube = useYoutubeStore();
+const ui = useUiStore();
 
 const scrubbing = ref(false);
 const scrubValue = ref(0);
 const upNextSearch = ref('');
+const searchSource = ref('youtube');
 const shufflingQueue = ref(false);
 
 const duration = computed(() => Number(player.nowPlaying?.duration) || 0);
@@ -40,12 +44,39 @@ const filteredUpcoming = computed(() => {
     return haystack.includes(term);
   });
 });
+const searchTerm = computed(() => upNextSearch.value.trim().toLowerCase());
+const libraryResults = computed(() => {
+  if (!searchTerm.value) return [];
+  return library.songs.filter((song) =>
+    [song.title, song.artist, song.album, song.genre]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase()
+      .includes(searchTerm.value)
+  );
+});
 const nowItem = computed(() => queue.nowPlaying);
+
+let youtubeSearchTimer;
 
 onMounted(() => {
   if (!queue.loaded) queue.fetch();
   if (!moods.loaded) moods.fetch();
   if (!library.loaded) library.fetch();
+});
+
+watch(upNextSearch, (value, previousValue) => {
+  if (!previousValue.trim()) searchSource.value = 'youtube';
+  clearTimeout(youtubeSearchTimer);
+  youtube.clearSearch();
+  const query = value.trim();
+  if (query.length < 2) return;
+  youtubeSearchTimer = setTimeout(() => youtube.search(query), 400);
+});
+
+onBeforeUnmount(() => {
+  clearTimeout(youtubeSearchTimer);
+  youtube.clearSearch();
 });
 
 function startScrub(event) {
@@ -85,6 +116,7 @@ async function shuffleQueue() {
 
 <template>
   <div>
+    <HomeTools />
     <!-- Now playing hero -->
     <section class="section">
       <div class="hero">
@@ -167,7 +199,7 @@ async function shuffleQueue() {
     <!-- Queue -->
     <section class="section">
       <div class="section-head">
-        <h2>Up next</h2>
+        <h2>{{ searchTerm ? 'Search results' : 'Up next' }}</h2>
         <span class="sub">
           {{ filteredUpcoming.length }} in the queue
           <template v-if="upNextSearch.trim()"> (filtered from {{ upcoming.length }}) </template>
@@ -183,64 +215,131 @@ async function shuffleQueue() {
         </button>
       </div>
       <div class="upnext-tools">
-        <label class="faint" for="upnext-search">Search queue</label>
+        <label class="faint" for="upnext-search">Search queue, library, and YouTube</label>
         <input
           id="upnext-search"
           v-model="upNextSearch"
           type="search"
-          placeholder="Search title, artist, album or requester…"
+          placeholder="Search songs, artists, albums, or YouTube…"
           autocomplete="off"
         />
       </div>
 
-      <div v-if="queue.loading && !queue.loaded" class="empty">Loading the queue…</div>
-      <div v-else-if="!upcoming.length" class="empty">
-        The queue is empty. Head to the
-        <RouterLink to="/library">library</RouterLink> and add something.
+      <div v-if="searchTerm" class="search-sources" role="group" aria-label="Search source">
+        <button
+          class="chip"
+          type="button"
+          :aria-pressed="searchSource === 'youtube'"
+          @click="searchSource = 'youtube'"
+        >
+          YouTube<template v-if="youtube.searched"> ({{ youtube.results.length }})</template>
+        </button>
+        <button
+          class="chip"
+          type="button"
+          :aria-pressed="searchSource === 'library'"
+          @click="searchSource = 'library'"
+        >
+          Library ({{ libraryResults.length }})
+        </button>
+        <button
+          class="chip"
+          type="button"
+          :aria-pressed="searchSource === 'queue'"
+          @click="searchSource = 'queue'"
+        >
+          Queue ({{ filteredUpcoming.length }})
+        </button>
       </div>
-      <div v-else-if="!filteredUpcoming.length" class="empty">
-        No matches in the queue for “{{ upNextSearch }}”.
+
+      <template v-if="!searchTerm || searchSource === 'queue'">
+        <div v-if="queue.loading && !queue.loaded" class="empty">Loading the queue…</div>
+        <div v-else-if="!upcoming.length && !searchTerm" class="empty">
+          The queue is empty. Head to the
+          <button class="inline-link" type="button" @click="ui.homePanel = 'library'">library</button> and add something.
+        </div>
+        <div v-else-if="!filteredUpcoming.length" class="empty">
+          {{ searchTerm ? `No queue matches for “${upNextSearch.trim()}”.` : 'The queue is empty.' }}
+        </div>
+        <ul v-if="filteredUpcoming.length" class="qlist panel">
+          <QueueItemRow
+            v-for="(item, index) in filteredUpcoming"
+            :key="item.id"
+            :item="item"
+            :index="index"
+          />
+        </ul>
+      </template>
+
+      <div v-if="searchTerm" class="search-results">
+        <section v-if="searchSource === 'library'">
+          <div class="section-head">
+            <h3>Library</h3>
+            <span class="sub">{{ libraryResults.length }} matches</span>
+          </div>
+          <div v-if="library.loading && !library.loaded" class="empty">Loading the library…</div>
+          <div v-else-if="!libraryResults.length" class="empty">No library matches.</div>
+          <div v-else class="card-grid">
+            <SongCard
+              v-for="song in libraryResults"
+              :key="song.id"
+              :song="song"
+              compact
+            />
+          </div>
+        </section>
+
+        <section v-else-if="searchSource === 'youtube'">
+          <div class="section-head">
+            <h3>YouTube</h3>
+            <span v-if="youtube.searched" class="sub">{{ youtube.results.length }} results</span>
+          </div>
+          <div v-if="youtube.searching && !youtube.results.length" class="empty">Searching YouTube…</div>
+          <div v-else-if="youtube.searched && !youtube.results.length" class="empty">No YouTube matches.</div>
+          <div v-else-if="!youtube.searched" class="empty">
+            Enter at least 2 characters to search YouTube.
+          </div>
+          <div v-else class="youtube-results">
+            <article v-for="result in youtube.results" :key="result.videoId" class="youtube-result">
+              <img
+                class="youtube-art"
+                :src="result.thumbnailUrl"
+                :alt="`Thumbnail for ${result.title}`"
+                loading="lazy"
+              />
+              <div class="youtube-meta">
+                <h3 class="truncate" :title="result.title">{{ result.title }}</h3>
+                <p class="muted truncate">{{ result.channel || 'YouTube' }}</p>
+                <p class="faint">
+                  {{ result.isLive ? 'Live' : formatTime(result.duration) }}
+                  <span v-if="result.songId"> · In library</span>
+                  <span v-else-if="result.tooLong"> · Too long to add</span>
+                </p>
+              </div>
+              <div class="youtube-actions">
+                <button
+                  class="btn btn-sm btn-primary"
+                  type="button"
+                  :disabled="youtube.adding[result.videoId] || (result.isLive || result.tooLong) && !result.songId"
+                  @click="youtube.addSong(result)"
+                >
+                  {{ youtube.adding[result.videoId] ? 'Adding…' : 'Add' }}
+                </button>
+                <button
+                  class="btn btn-sm"
+                  type="button"
+                  :disabled="youtube.adding[result.videoId] || (result.isLive || result.tooLong) && !result.songId"
+                  @click="youtube.addSong(result, { playNext: true })"
+                >
+                  Play next
+                </button>
+              </div>
+            </article>
+          </div>
+        </section>
       </div>
-      <ul v-else class="qlist panel">
-        <QueueItemRow
-          v-for="(item, index) in filteredUpcoming"
-          :key="item.id"
-          :item="item"
-          :index="index"
-        />
-      </ul>
     </section>
 
-    <!-- Room chat -->
-    <ChatPanel />
-
-    <!-- Moods -->
-    <section class="section">
-      <div class="section-head">
-        <h2>Moods</h2>
-        <RouterLink to="/moods" class="sub">Browse all</RouterLink>
-      </div>
-      <div v-if="!moods.moods.length" class="empty">
-        No moods yet. An admin can create them on the <RouterLink to="/admin">admin</RouterLink> page.
-      </div>
-      <div v-else class="card-row">
-        <MoodCard v-for="mood in moods.moods" :key="mood.id" :mood="mood" />
-      </div>
-    </section>
-
-    <!-- Recently added -->
-    <section class="section">
-      <div class="section-head">
-        <h2>Recently added</h2>
-        <RouterLink to="/library" class="sub">Open library</RouterLink>
-      </div>
-      <div v-if="!library.recentlyAdded.length" class="empty">
-        Nothing in the library yet — <RouterLink to="/upload">upload a track</RouterLink>.
-      </div>
-      <div v-else class="card-row">
-        <SongCard v-for="song in library.recentlyAdded" :key="song.id" :song="song" compact />
-      </div>
-    </section>
   </div>
 </template>
 
@@ -350,10 +449,75 @@ async function shuffleQueue() {
   padding: 0.5rem;
 }
 
+.inline-link {
+  padding: 0;
+  color: var(--accent);
+}
+
+.inline-link:hover {
+  text-decoration: underline;
+}
+
 .upnext-tools {
   display: grid;
   gap: 0.35rem;
   margin: 0.5rem 0 0.75rem;
+}
+
+.search-results {
+  display: grid;
+}
+
+.search-sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.youtube-results {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.youtube-result {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.youtube-art {
+  display: block;
+  width: 120px;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  background: var(--surface-3);
+}
+
+.youtube-meta {
+  min-width: 0;
+}
+
+.youtube-meta h3 {
+  font-size: 0.9rem;
+}
+
+.youtube-meta p {
+  margin: 0.15rem 0 0;
+  font-size: 0.76rem;
+}
+
+.youtube-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.35rem;
 }
 
 @media (max-width: 860px) {
@@ -377,6 +541,20 @@ async function shuffleQueue() {
 }
 
 @media (max-width: 560px) {
+  .youtube-result {
+    grid-template-columns: 84px minmax(0, 1fr);
+    gap: 0.65rem;
+  }
+
+  .youtube-art {
+    width: 84px;
+  }
+
+  .youtube-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+
   .hero {
     grid-template-columns: 1fr;
   }
