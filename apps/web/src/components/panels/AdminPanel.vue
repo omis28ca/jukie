@@ -44,6 +44,12 @@ const storage = ref(null);
 const storageRootInput = ref('');
 const storageMove = ref(true);
 const storageLoading = ref(false);
+const storageReport = ref(null);
+const reportLoading = ref(false);
+const pruning = ref(false);
+const orphanCount = computed(() =>
+  (storageReport.value?.uploads?.orphanCount || 0) + (storageReport.value?.artwork?.orphanCount || 0)
+);
 
 const isAdmin = computed(() => session.isAdmin);
 
@@ -90,10 +96,36 @@ async function loadStorage() {
   try {
     storage.value = await api.get('/api/admin/storage/location');
     storageRootInput.value = storage.value?.root || '';
+    await loadStorageReport();
   } catch (error) {
     ui.error(error);
   } finally {
     storageLoading.value = false;
+  }
+}
+
+async function loadStorageReport() {
+  reportLoading.value = true;
+  try {
+    storageReport.value = await api.get('/api/admin/storage');
+  } catch (error) {
+    ui.error(error);
+  } finally {
+    reportLoading.value = false;
+  }
+}
+
+async function pruneStorage() {
+  if (!window.confirm('Delete unreferenced upload and artwork files? This cannot be undone.')) return;
+  pruning.value = true;
+  try {
+    const result = await api.post('/api/admin/storage/prune');
+    ui.success(`Removed ${result.removedCount} unreferenced files`);
+    await loadStorageReport();
+  } catch (error) {
+    ui.error(error);
+  } finally {
+    pruning.value = false;
   }
 }
 
@@ -126,6 +158,7 @@ async function saveStorageRoot({ useDefault = false } = {}) {
         : `Music storage set to ${payload?.root || root}`
     );
     await library.fetch();
+    await loadStorageReport();
   } catch (error) {
     ui.error(error);
   } finally {
@@ -684,6 +717,24 @@ async function deleteSong(song) {
       </section>
 
       <!-- Storage / library -->
+      <section class="section">
+        <div class="section-head">
+          <h2>Storage usage and cleanup</h2>
+          <button class="btn btn-sm" type="button" :disabled="reportLoading || pruning" @click="loadStorageReport">Refresh usage</button>
+        </div>
+        <div class="panel stack">
+          <template v-if="storageReport">
+            <p>Uploads: {{ storageReport.uploads.fileCount }} files · {{ formatBytes(storageReport.uploads.totalBytes) }}</p>
+            <p>Artwork: {{ storageReport.artwork.fileCount }} files · {{ formatBytes(storageReport.artwork.totalBytes) }}</p>
+            <p>{{ orphanCount }} unreferenced files can be removed.</p>
+          </template>
+          <p v-else class="muted">{{ reportLoading ? 'Loading storage usage…' : 'Storage usage unavailable. Try refreshing.' }}</p>
+          <button class="btn btn-danger" type="button" :disabled="!orphanCount || reportLoading || pruning || storageLoading" @click="pruneStorage">
+            {{ pruning ? 'Cleaning…' : 'Remove unreferenced files' }}
+          </button>
+        </div>
+      </section>
+
       <section class="section">
         <div class="section-head">
           <h2>Storage &amp; library</h2>

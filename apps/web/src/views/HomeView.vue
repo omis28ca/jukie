@@ -63,6 +63,7 @@ onMounted(() => {
   if (!queue.loaded) queue.fetch();
   if (!moods.loaded) moods.fetch();
   if (!library.loaded) library.fetch();
+  youtube.fetchJobs();
 });
 
 watch(upNextSearch, (value, previousValue) => {
@@ -87,6 +88,25 @@ function startScrub(event) {
 
 function onScrub(event) {
   scrubValue.value = Number(event.target.value);
+}
+
+function onVolume(event) {
+  player.setVolume(Number(event.target.value)).catch(() => {
+    /* toast already raised */
+  });
+}
+
+function youtubeAction(result) {
+  const job = youtube.songJobFor(result.videoId);
+  if (job) return {
+    disabled: true,
+    label: job.status === 'queued' ? 'Waiting…' : `Downloading ${Math.round(job.progressPercent || 0)}%`
+  };
+  if (youtube.adding[result.videoId]) return { disabled: true, label: 'Adding…' };
+  return {
+    disabled: Boolean((result.isLive || result.tooLong) && !result.songId),
+    label: 'Add'
+  };
 }
 
 async function commitScrub() {
@@ -191,6 +211,11 @@ async function shuffleQueue() {
               Start queue
             </button>
             <button v-else class="btn" type="button" @click="player.stop()">Stop queue</button>
+          </div>
+          <div class="hero-volume">
+            <label for="room-volume">Room volume — {{ player.volume }}%</label>
+            <input id="room-volume" type="range" min="0" max="100" step="1"
+              :value="player.volume" :aria-valuetext="`${player.volume} percent`" @input="onVolume" />
           </div>
         </div>
       </div>
@@ -320,20 +345,23 @@ async function shuffleQueue() {
                 <button
                   class="btn btn-sm btn-primary"
                   type="button"
-                  :disabled="youtube.adding[result.videoId] || (result.isLive || result.tooLong) && !result.songId"
+                  :disabled="youtubeAction(result).disabled"
                   @click="youtube.addSong(result)"
                 >
-                  {{ youtube.adding[result.videoId] ? 'Adding…' : 'Add' }}
+                  {{ youtubeAction(result).label }}
                 </button>
                 <button
                   class="btn btn-sm"
                   type="button"
-                  :disabled="youtube.adding[result.videoId] || (result.isLive || result.tooLong) && !result.songId"
+                  :disabled="youtubeAction(result).disabled"
                   @click="youtube.addSong(result, { playNext: true })"
                 >
                   Play next
                 </button>
               </div>
+              <p v-if="youtube.songJobFor(result.videoId)" class="muted" role="status">
+                {{ youtubeAction(result).label }} — joins the queue when ready.
+              </p>
             </article>
           </div>
         </section>
@@ -443,6 +471,13 @@ async function shuffleQueue() {
   display: flex;
   gap: 0.55rem;
   flex-wrap: wrap;
+}
+
+.hero-volume {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 1rem;
+  max-width: 360px;
 }
 
 .qlist {

@@ -115,6 +115,14 @@ the drawer, or close it with Close, Escape, or a click on the backdrop. Forms re
 while switching sections or closing and reopening the drawer. Admin actions still require the PIN.
 A join QR code and room link stay visible at the top of the homepage while scrolling, so other
 guests can join from their phones on the same Wi-Fi.
+Recent guest messages appear in a floating chat overlay. Hide the preview to minimize it, or
+choose Open chat (or the Chat tool) to see the conversation, online guests, and send a message
+in the drawer. Admins can clear the conversation there.
+The homepage also shows live connection status, a Change name button, and guest room-volume
+controls. YouTube results display waiting/downloading status until they join the queue.
+PIN-verified admins can edit a mood's songs (add, remove, and reorder, then Save songs) in the
+Moods drawer. The Admin drawer includes storage usage and confirmation-gated cleanup of
+unreferenced upload and artwork files.
 
 | Homepage area | Purpose |
 | --- | --- |
@@ -122,6 +130,7 @@ guests can join from their phones on the same Wi-Fi.
 | Library drawer | Browse, filter, enqueue, preview, YouTube download, delete (admin) |
 | Upload drawer | Drag/drop uploader |
 | Moods drawer | Browse moods and their songs, select a mood to play |
+| Chat overlay and drawer | Recent messages, live conversation, online guests, and admin chat clearing |
 | Admin drawer | PIN entry, volume, moods, mood-from-history, audio output, storage management |
 
 ---

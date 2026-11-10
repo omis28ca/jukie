@@ -7,6 +7,7 @@ import PlayerBar from './components/PlayerBar.vue';
 import ToastHost from './components/ToastHost.vue';
 import JoinGate from './components/JoinGate.vue';
 import JoinInvite from './components/JoinInvite.vue';
+import ChatOverlay from './components/ChatOverlay.vue';
 import { useSessionStore } from './stores/session';
 import { useUiStore } from './stores/ui';
 import { usePlayerStore } from './stores/player';
@@ -105,10 +106,17 @@ function onGateDone() {
       <div class="app-main">
 
         <main class="content">
+          <div class="session-tools">
+            <span class="chip" role="status">{{ ui.connected ? 'Live updates connected' : 'Offline — reconnecting…' }}</span>
+            <button class="btn btn-sm" type="button" @click="changingName = true">
+              {{ session.name }} · Change name
+            </button>
+          </div>
           <JoinInvite />
           <WifiSetupBanner />
           <RouterView />
         </main>
+        <ChatOverlay />
 
       </div>
 
@@ -129,8 +137,17 @@ function onGateDone() {
   min-height: 100vh;
 }
 
+.session-tools {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
 .app-main {
   min-height: 100vh;
+  padding-bottom: 300px;
 }
 
 .app-main > * {

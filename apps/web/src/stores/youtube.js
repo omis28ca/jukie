@@ -64,6 +64,7 @@ export const useYoutubeStore = defineStore('youtube', {
       const index = this.jobs.findIndex((entry) => entry.id === job.id);
       if (index === -1) {
         this.jobs = [job, ...this.jobs].slice(0, 20);
+        if (job.kind === 'song' && FINAL_STATUSES.has(job.status)) this.finishSongJob(job);
         return;
       }
       // Socket updates can overtake the HTTP response that started or cancelled the job, so never

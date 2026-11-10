@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onActivated, onMounted, ref, watch } from 'vue';
 import { useChatStore } from '../stores/chat';
 import { useSessionStore } from '../stores/session';
 import { initials } from '../lib/format';
@@ -50,7 +50,8 @@ onMounted(() => {
   else scrollToLatest();
 });
 
-watch(() => chat.messages.length, scrollToLatest);
+onActivated(scrollToLatest);
+watch(() => chat.messages.at(-1)?.id, scrollToLatest);
 </script>
 
 <template>
@@ -188,6 +189,8 @@ watch(() => chat.messages.length, scrollToLatest);
 
 .msg-meta {
   display: flex;
+  flex-wrap: wrap;
+  overflow-wrap: anywhere;
   align-items: center;
   gap: 0.4rem;
   margin: 0;
@@ -202,6 +205,7 @@ watch(() => chat.messages.length, scrollToLatest);
 
 .composer {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
 }

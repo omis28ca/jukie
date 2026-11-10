@@ -4,6 +4,7 @@ import LibraryPanel from './panels/LibraryPanel.vue';
 import UploadPanel from './panels/UploadPanel.vue';
 import MoodsPanel from './panels/MoodsPanel.vue';
 import AdminPanel from './panels/AdminPanel.vue';
+import ChatPanel from './ChatPanel.vue';
 import ToastHost from './ToastHost.vue';
 import { useUiStore } from '../stores/ui';
 import { usePreview } from '../lib/preview';
@@ -15,6 +16,7 @@ const panels = [
   { id: 'library', label: 'Library', component: LibraryPanel },
   { id: 'upload', label: 'Upload', component: UploadPanel },
   { id: 'moods', label: 'Moods', component: MoodsPanel },
+  { id: 'chat', label: 'Chat', component: ChatPanel },
   { id: 'admin', label: 'Admin', component: AdminPanel }
 ];
 const activePanel = computed(() => panels.find((panel) => panel.id === ui.homePanel));

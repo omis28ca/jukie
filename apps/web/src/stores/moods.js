@@ -69,6 +69,19 @@ export const useMoodsStore = defineStore('moods', {
         throw error;
       }
     },
+    async updateSongs(id, name, songIds) {
+      const ui = useUiStore();
+      try {
+        const detail = await api.put(`/api/moods/${encodeURIComponent(id)}`, { name, songIds });
+        if (this.detail?.id === id) this.detail = detail;
+        await this.fetch();
+        ui.success('Mood songs updated');
+        return detail;
+      } catch (error) {
+        ui.error(error);
+        throw error;
+      }
+    },
     async rename(id, name) {
       const ui = useUiStore();
       try {
